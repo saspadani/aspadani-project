@@ -30,13 +30,15 @@ describe("POST /api/login", () => {
 });
 
 describe("guard sesi", () => {
+  const PROTECTED = "https://example.com/api/projects";
+
   it("401 tanpa cookie", async () => {
-    const res = await SELF.fetch("https://example.com/api/protected-test");
+    const res = await SELF.fetch(PROTECTED);
     expect(res.status).toBe(401);
   });
 
   it("401 dengan cookie sampah", async () => {
-    const res = await SELF.fetch("https://example.com/api/protected-test", {
+    const res = await SELF.fetch(PROTECTED, {
       headers: { Cookie: "ap_session=token-palsu" },
     });
     expect(res.status).toBe(401);
@@ -46,7 +48,7 @@ describe("guard sesi", () => {
     const loginRes = await login(env.APP_PASSWORD as string);
     const cookie = loginRes.headers.get("set-cookie")!.split(";")[0];
 
-    const ok = await SELF.fetch("https://example.com/api/protected-test", {
+    const ok = await SELF.fetch(PROTECTED, {
       headers: { Cookie: cookie },
     });
     expect(ok.status).toBe(200);
@@ -57,7 +59,7 @@ describe("guard sesi", () => {
     });
     expect(out.status).toBe(200);
 
-    const after = await SELF.fetch("https://example.com/api/protected-test", {
+    const after = await SELF.fetch(PROTECTED, {
       headers: { Cookie: cookie },
     });
     expect(after.status).toBe(401);

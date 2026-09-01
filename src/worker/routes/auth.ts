@@ -61,5 +61,3 @@ authRoutes.post("/logout", async (c) => {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
   return c.json({ ok: true });
 });
-
-authRoutes.get("/me", (c) => c.json({ user: "pribadi" }));

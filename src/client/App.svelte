@@ -1,20 +1,26 @@
 <script lang="ts">
-  const title = "Aspadani Project";
+  import Login from "./pages/Login.svelte";
+  import Dashboard from "./pages/Dashboard.svelte";
+
+  let authed = $state<boolean | null>(null); // null = sedang cek
+
+  $effect(() => {
+    fetch("/api/me").then((r) => (authed = r.ok));
+  });
 </script>
 
-<main>
-  <h1>{title}</h1>
-  <p>Kerangka jalan. Cek API: <a href="/api/health"><code>/api/health</code></a></p>
-</main>
+{#if authed === null}
+  <p class="loading">Memuat…</p>
+{:else if authed}
+  <Dashboard />
+{:else}
+  <Login onSuccess={() => (authed = true)} />
+{/if}
 
 <style>
-  main {
-    max-width: 40rem;
-    margin: 3rem auto;
-    padding: 0 1rem;
-    font-family: system-ui, sans-serif;
-  }
-  h1 {
-    font-size: 1.4rem;
+  .loading {
+    text-align: center;
+    margin-top: 40vh;
+    color: #737373;
   }
 </style>
