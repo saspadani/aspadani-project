@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.54.2",
+    "@cloudflare/vitest-plugin": "^1.1.2",
     "@cloudflare/workers-types": "^5.20260901.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tsconfig/svelte": "^5.0.8",
@@ -25,6 +26,7 @@
     "svelte-check": "^4.7.6",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
+    "vitest": "^4.1.11",
     "wrangler": "^4.127.1"
   }
 }
