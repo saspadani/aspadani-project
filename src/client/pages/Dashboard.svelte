@@ -13,6 +13,10 @@
   }
   load();
 
+  function open(p: Project) {
+    location.hash = `#/p/${p.id}`;
+  }
+
   async function create(e: SubmitEvent) {
     e.preventDefault();
     const name = newName.trim();
@@ -26,6 +30,7 @@
       });
       projects = [...projects, { ...project, activeTaskCount: 0 }];
       newName = "";
+      open(project); // langsung ke board baru
     } catch (err) {
       error = String(err instanceof Error ? err.message : err);
     } finally {
@@ -74,14 +79,16 @@
     <ul>
       {#each projects as p (p.id)}
         <li style="--accent: {p.color}">
-          <span class="dot"></span>
-          <div class="info">
-            <strong>{p.name}</strong>
-            <small>{p.activeTaskCount ?? 0} tugas aktif</small>
-          </div>
+          <button class="row" onclick={() => open(p)}>
+            <span class="dot"></span>
+            <span class="info">
+              <strong>{p.name}</strong>
+              <small>{p.activeTaskCount ?? 0} tugas aktif</small>
+            </span>
+          </button>
           <div class="actions">
-            <button class="ghost" onclick={() => archive(p)}>Arsipkan</button>
-            <button class="ghost danger" onclick={() => remove(p)}>Hapus</button>
+            <button class="ghost" onclick={(e) => { e.stopPropagation(); archive(p); }}>Arsipkan</button>
+            <button class="ghost danger" onclick={(e) => { e.stopPropagation(); remove(p); }}>Hapus</button>
           </div>
         </li>
       {/each}
@@ -144,11 +151,28 @@
   li {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.7rem 0.9rem;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
     background: #fff;
     border: 1px solid #e5e5e5;
     border-radius: 8px;
+  }
+  .row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.45rem;
+    border: none;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    border-radius: 6px;
+  }
+  .row:hover {
+    background: #f5f5f5;
   }
   .dot {
     width: 0.55rem;
@@ -158,7 +182,6 @@
     flex: none;
   }
   .info {
-    flex: 1;
     display: flex;
     flex-direction: column;
   }
@@ -168,6 +191,7 @@
   .actions {
     display: flex;
     gap: 0.35rem;
+    flex: none;
   }
   button.ghost {
     border: none;
