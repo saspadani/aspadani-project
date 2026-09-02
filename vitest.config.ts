@@ -10,9 +10,10 @@ export default defineConfig(async () => {
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           bindings: {
-            // Binding khusus test. ACCESS_AUD sengaja tidak diset → middleware
-            // Access dalam mode teruskan (perilaku dev yang sama).
             TEST_MIGRATIONS: migrations,
+            // Override var produksi: di test, middleware Access dalam mode teruskan
+            // (tidak ada JWT Access untuk diverifikasi di lingkungan test).
+            ACCESS_AUD: "",
           },
         },
       }),
