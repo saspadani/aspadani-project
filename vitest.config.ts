@@ -10,9 +10,9 @@ export default defineConfig(async () => {
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           bindings: {
-            // Binding khusus test
+            // Binding khusus test. ACCESS_AUD sengaja tidak diset → middleware
+            // Access dalam mode teruskan (perilaku dev yang sama).
             TEST_MIGRATIONS: migrations,
-            APP_PASSWORD: "test-pass-6ab9d01c",
           },
         },
       }),

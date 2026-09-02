@@ -1,6 +1,6 @@
 # Aspadani Project — Web Manajemen Pribadi (Kanban) · Implementation Plan
 
-> **For Hermes:** eksekusi milestone demi milestone, jangan lompat. Status: **ARSITEKTUR TERKUNCI** — belum ada kode.
+> **For Hermes:** eksekusi milestone demi milestone, jangan lompat. Status: **DEPLOYED (v1)** — M0–M5 selesai & terverifikasi 2026-09-01/02; M6 deploy ke https://aspadani-project.aspadani.workers.dev (migrasi remote ✅, secret APP_PASSWORD diisi user).
 > Disusun 2026-09-01. Klaim stack diverifikasi ke Context7 (bagian *Sumber verifikasi* di bawah).
 > Keputusan 2026-09-01: alternatif **htmx + Alpine.js dievaluasi dan ditolak** — DnD (fitur inti kanban) memaksa htmx+SortableJS punya dua pemilik DOM; Alpine tak menyentuh drag sama sekali; jalur SPA selaras tujuan belajar full-stack TS. **Svelte SPA terkunci.**
 

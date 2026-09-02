@@ -3,28 +3,18 @@ import { describe, it, expect, beforeAll } from "vitest";
 import type { Env as WorkerEnv } from "../src/worker/types";
 
 const e = env as unknown as WorkerEnv & { DB: D1Database };
-let cookieCache = "";
-async function ensureCookie() {
-  if (cookieCache) return;
-  const res = await SELF.fetch("https://example.com/api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: e.APP_PASSWORD }),
-  });
-  expect(res.status).toBe(200);
-  cookieCache = res.headers.get("set-cookie")!.split(";")[0];
-}
-const H = () => ({ Cookie: cookieCache, "Content-Type": "application/json" });
+const H = () => ({ Cookie: "", "Content-Type": "application/json" });
 
 let projectId = "";
 
 beforeAll(async () => {
-  await ensureCookie();
+  // Tanpa ACCESS_AUD, middleware Access meneruskan — tidak perlu login.
   const res = await SELF.fetch("https://example.com/api/projects", {
     method: "POST",
-    headers: H(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: "Papan Uji" }),
   });
+  expect(res.status).toBe(201);
   const { project } = (await res.json()) as { project: { id: string } };
   projectId = project.id;
 });
@@ -126,7 +116,6 @@ describe("tasks", () => {
     expect(task.priority).toBe("high");
     expect(task.dueDate).toBe("2026-09-10");
 
-    // prioritas tak dikenal → diabaikan (tetap high)
     const res2 = await SELF.fetch(`https://example.com/api/tasks/${taskId}`, {
       method: "PATCH",
       headers: H(),
@@ -157,7 +146,6 @@ describe("order (hasil drag)", () => {
     const colTasks = board.tasks.filter((t) => t.columnId === backlog.id);
     expect(colTasks.length).toBeGreaterThanOrEqual(1);
 
-    // Pindahkan task pertama backlog ke kolom tengah posisi 0, dan balik urutan sisanya
     const moving = colTasks[0];
     const body = {
       tasks: [
@@ -177,7 +165,6 @@ describe("order (hasil drag)", () => {
     expect(moved.columnId).toBe(mid.id);
     expect(moved.sort).toBe(0);
 
-    // Reorder kolom juga bekerja
     const res2 = await SELF.fetch(`https://example.com/api/board/${projectId}/order`, {
       method: "PATCH",
       headers: H(),
@@ -194,7 +181,6 @@ describe("order (hasil drag)", () => {
   });
 
   it("PATCH order dengan task dari project lain → diabaikan (guard project_id)", async () => {
-    // buat project kedua + task di kolom miliknya sendiri (operasi sah)
     const created = await SELF.fetch("https://example.com/api/projects", {
       method: "POST",
       headers: H(),
@@ -214,7 +200,6 @@ describe("order (hasil drag)", () => {
     expect(made.status).toBe(201);
     const { task: foreignTask } = (await made.json()) as { task: { id: string } };
 
-    // coba pindahkan task project lain lewat endpoint project pertama
     const firstBoard = await getBoard();
     const firstBacklog = firstBoard.columns[0].id;
     const res = await SELF.fetch(`https://example.com/api/board/${projectId}/order`, {
@@ -224,9 +209,8 @@ describe("order (hasil drag)", () => {
         tasks: [{ id: foreignTask.id, columnId: firstBacklog, sort: 5 }],
       }),
     });
-    expect(res.status).toBe(200); // batch sukses, tapi…
+    expect(res.status).toBe(200);
 
-    // …task asing TIDAK berubah (masih kolom asalnya, sort tetap 0)
     const check = await e.DB.prepare("SELECT column_id, sort FROM tasks WHERE id = ?")
       .bind(foreignTask.id)
       .first<{ column_id: string; sort: number }>();

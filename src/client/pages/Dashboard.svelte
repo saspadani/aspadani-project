@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, logout } from "../lib/api";
+  import { api } from "../lib/api";
   import type { Project } from "../lib/types";
 
   let projects = $state<Project[]>([]);
@@ -57,9 +57,6 @@
 <main class="wrap">
   <header>
     <h1>Proyek</h1>
-    <button class="ghost" onclick={() => logout().then(() => window.location.reload())}>
-      Keluar
-    </button>
   </header>
 
   <form class="new" onsubmit={create}>

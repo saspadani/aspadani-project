@@ -1,10 +1,9 @@
 import { Hono } from "hono";
 import type { Env } from "./types";
-import { authRoutes } from "./routes/auth";
 import { projectRoutes } from "./routes/projects";
 import { boardRoutes } from "./routes/board";
 import { taskRoutes } from "./routes/tasks";
-import { requireSession } from "./middleware/auth";
+import { verifyAccess } from "./middleware/access";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -13,13 +12,10 @@ app.onError((err, c) => {
   return c.json({ error: "internal" }, 500);
 });
 
-// Publik
-app.get("/api/health", (c) => c.json({ ok: true, app: "aspadani-project" }));
-app.route("/api", authRoutes); // /api/login, /api/logout
-
-// Terlindungi: semua /api/* setelah titik ini wajib sesi valid
-app.use("/api/*", requireSession);
-app.get("/api/me", (c) => c.json({ user: "pribadi" })); // 401 bila tak bersesi → sinyal login UI
+// Cloudflare Access (dashboard) menjaga seluruh worker; middleware ini
+// memverifikasi JWT Access-nya. Aktif hanya bila ACCESS_AUD diset sebagai secret.
+app.use("/api/*", verifyAccess);
+app.get("/api/me", (c) => c.json({ user: "pribadi" }));
 app.route("/api/projects", projectRoutes);
 app.route("/api", boardRoutes);
 app.route("/api", taskRoutes);

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Login from "./pages/Login.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
   import Board from "./pages/Board.svelte";
 
@@ -15,15 +14,14 @@
     fetch("/api/me").then((r) => (authed = r.ok));
   });
 
-  const boardId = $derived(
-    route.startsWith("#/p/") ? route.slice(4) : null,
-  );
+  const boardId = $derived(route.startsWith("#/p/") ? route.slice(4) : null);
 </script>
 
 {#if authed === null}
   <p class="loading">Memuat…</p>
 {:else if !authed}
-  <Login onSuccess={() => (authed = true)} />
+  <!-- Hanya tercapai bila Cloudflare Access belum aktif / JWT ditolak -->
+  <p class="denied">Akses ditolak. Buka lewat tautan aplikasi, atau cek konfigurasi Cloudflare Access.</p>
 {:else if boardId}
   <Board projectId={boardId} />
 {:else}
@@ -31,7 +29,8 @@
 {/if}
 
 <style>
-  .loading {
+  .loading,
+  .denied {
     text-align: center;
     margin-top: 40vh;
     color: #737373;
