@@ -19,5 +19,6 @@
     // AUD tag aplikasi Access — identitas publik (bukan rahasia), untuk cek `aud` JWT.
     "ACCESS_AUD": "104351e77b91a982bbfd54a019124208838a91d21896dc8915398dbb5ffb190c"
   },
+  "routes": [{ "pattern": "kanban.aspadani.id", "custom_domain": true }],
   "observability": { "enabled": true }
 }
