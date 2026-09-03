@@ -8,6 +8,13 @@
       "when": 1788252844732,
       "tag": "0000_nappy_sentinels",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788400946071,
+      "tag": "0001_breezy_hydra",
+      "breakpoints": true
     }
   ]
 }

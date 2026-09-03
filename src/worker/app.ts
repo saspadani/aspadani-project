@@ -3,6 +3,7 @@ import type { Env } from "./types";
 import { projectRoutes } from "./routes/projects";
 import { boardRoutes } from "./routes/board";
 import { taskRoutes } from "./routes/tasks";
+import { subtaskRoutes } from "./routes/subtasks";
 import { verifyAccess } from "./middleware/access";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -19,5 +20,6 @@ app.get("/api/me", (c) => c.json({ user: "pribadi" }));
 app.route("/api/projects", projectRoutes);
 app.route("/api", boardRoutes);
 app.route("/api", taskRoutes);
+app.route("/api", subtaskRoutes);
 
 export default app;

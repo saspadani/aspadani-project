@@ -53,3 +53,18 @@ export const sessions = sqliteTable("sessions", {
   tokenHash: text("token_hash").primaryKey(),
   expiresAt: text("expires_at").notNull(),
 });
+
+export const subtasks = sqliteTable(
+  "subtasks",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    done: integer("done").notNull().default(0),
+    sort: integer("sort").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [index("idx_subtasks_task").on(t.taskId, t.sort)],
+);

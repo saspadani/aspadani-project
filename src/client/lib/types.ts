@@ -45,3 +45,12 @@ export type Task = {
   dueDate: string | null;
   sort: number;
 };
+
+export type Subtask = {
+  id: string;
+  taskId: string;
+  title: string;
+  done: number;
+  sort: number;
+  createdAt: string;
+};
