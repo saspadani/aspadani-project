@@ -20,6 +20,37 @@
 
   let selected = $state<Task | null>(null);
 
+  // ---- filter & sort --------------------------------------------------------
+  type PrioFilter = "all" | "none" | "low" | "med" | "high";
+  type SortMode = "manual" | "dueDate" | "priority";
+  let prioFilter = $state<PrioFilter>("all");
+  let sortMode = $state<SortMode>("manual");
+
+  const PRIO_RANK: Record<string, number> = { none: 0, low: 1, med: 2, high: 3 };
+
+  /** Filter + sort kolom secara reaktif setiap state berubah. */
+  let visibleCols = $derived.by(() => {
+    return cols.map((c) => {
+      let cards = c.cards;
+      if (prioFilter !== "all") {
+        cards = cards.filter((t) => t.priority === prioFilter);
+      }
+      if (sortMode === "dueDate") {
+        cards = [...cards].sort((a, b) => {
+          if (!a.dueDate) return 1; // tanpa tenggat → bawah
+          if (!b.dueDate) return 1;
+          if (a.dueDate === b.dueDate) return 0;
+          return a.dueDate < b.dueDate ? -1 : 1;
+        });
+      } else if (sortMode === "priority") {
+        cards = [...cards].sort(
+          (a, b) => (PRIO_RANK[b.priority] ?? 0) - (PRIO_RANK[a.priority] ?? 0),
+        );
+      }
+      return { ...c, cards };
+    });
+  });
+
   const FLIP_MS = 160;
 
   async function load() {
@@ -176,19 +207,38 @@
   <header>
     <a class="back" href="#/">‹ Proyek</a>
     <h1>{projectName}</h1>
+    <div class="controls">
+      <label>
+        <span>Prioritas</span>
+        <select bind:value={prioFilter} aria-label="Filter prioritas">
+          <option value="all">Semua</option>
+          <option value="high">Tinggi</option>
+          <option value="med">Sedang</option>
+          <option value="low">Rendah</option>
+          <option value="none">—</option>
+        </select>
+      </label>
+      <label>
+        <span>Urutkan</span>
+        <select bind:value={sortMode} aria-label="Urutkan task">
+          <option value="manual">Manual</option>
+          <option value="dueDate">Tenggat</option>
+          <option value="priority">Prioritas</option>
+        </select>
+      </label>
+    </div>
   </header>
   {#if error}<p class="err">{error}</p>{/if}
 
   {#if loaded}
     <div class="board-wrap">
-      <!-- Zona level kolom: reorder kolom -->
       <section
         class="board"
         use:dndzone={{ items: cols, type: "column", flipDurationMs: FLIP_MS }}
         onconsider={(e: CustomEvent) => (cols = e.detail.items as ColVM[])}
         onfinalize={onColumnFinalize}
       >
-        {#each cols as c (c.id)}
+        {#each visibleCols as c (c.id)}
           <li class="col" animate:flip={{ duration: FLIP_MS }}>
             <div class="col-head">
               {#if renaming === c.id}
@@ -311,6 +361,32 @@
     min-height: 44px;
     display: flex;
     align-items: center;
+  }
+  .controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+  .controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: #525252;
+    font-weight: 500;
+  }
+  .controls select {
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.85rem;
+    background: #fff;
+  }
+  .controls select:focus {
+    outline: 2px solid #6366f1;
+    outline-offset: -1px;
   }
   .err {
     color: #dc2626;
@@ -533,6 +609,10 @@
     }
     .title {
       font-size: 0.95rem;
+    }
+    .controls select {
+      font-size: 0.85rem;
+      min-height: 44px;
     }
     button.mini {
       font-size: 0.85rem;
