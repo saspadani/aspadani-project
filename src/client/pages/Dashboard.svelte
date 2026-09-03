@@ -243,9 +243,12 @@
 <main class="wrap">
   <header>
     <h1>Proyek</h1>
-    <button class="search-btn" onclick={() => searchOpen = !searchOpen} aria-label="Cari task">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    </button>
+    <div class="head-actions">
+      <a class="search-btn" href="#/bantuan" aria-label="Panduan" title="Panduan penggunaan">?</a>
+      <button class="search-btn" onclick={() => searchOpen = !searchOpen} aria-label="Cari task">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </button>
+    </div>
   </header>
 
   {#if searchOpen}
@@ -558,6 +561,11 @@
   }
 
   /* Search */
+  .head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
   .search-btn {
     width: 2.2rem;
     height: 2.2rem;
@@ -572,6 +580,12 @@
   }
   .search-btn:hover {
     background: #f5f5f5;
+  }
+  a.search-btn {
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1;
   }
   .search-panel {
     margin-bottom: 1rem;

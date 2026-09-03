@@ -1,6 +1,7 @@
 <script lang="ts">
   import Dashboard from "./pages/Dashboard.svelte";
   import Board from "./pages/Board.svelte";
+  import Help from "./pages/Help.svelte";
 
   let route = $state(location.hash || "#/");
 
@@ -15,6 +16,7 @@
   });
 
   const boardId = $derived(route.startsWith("#/p/") ? route.slice(4) : null);
+  const isHelp = $derived(route === "#/bantuan");
 </script>
 
 {#if authed === null}
@@ -22,6 +24,8 @@
 {:else if !authed}
   <!-- Hanya tercapai bila Cloudflare Access belum aktif / JWT ditolak -->
   <p class="denied">Akses ditolak. Buka lewat tautan aplikasi, atau cek konfigurasi Cloudflare Access.</p>
+{:else if isHelp}
+  <Help />
 {:else if boardId}
   <Board projectId={boardId} />
 {:else}

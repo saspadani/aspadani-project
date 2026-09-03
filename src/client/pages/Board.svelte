@@ -424,6 +424,7 @@
       >
         🔁 Recurring
       </button>
+      <a class="recurring-btn help-link" href="#/bantuan" title="Panduan penggunaan">? Panduan</a>
     </div>
   </header>
   {#if error}<p class="err">{error}</p>{/if}
@@ -749,6 +750,11 @@
     background: #eef2ff;
     border-color: #6366f1;
     color: #4f46e5;
+  }
+  a.recurring-btn {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
   }
   .err {
     color: #dc2626;
