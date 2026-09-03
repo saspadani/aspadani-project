@@ -18,7 +18,10 @@ export async function verifyAccess(c: Context<{ Bindings: Env }>, next: Next) {
   if (!aud) return next(); // dev/test: Access belum aktif
 
   const assertion = c.req.header("Cf-Access-Jwt-Assertion");
-  if (!assertion) return c.json({ error: "unauthorized" }, 401);
+  if (!assertion) {
+    console.log("access deny: header Cf-Access-Jwt-Assertion tidak ada");
+    return c.json({ error: "unauthorized" }, 401);
+  }
 
   try {
     const [hB64, pB64, sB64] = assertion.split(".");
@@ -29,23 +32,41 @@ export async function verifyAccess(c: Context<{ Bindings: Env }>, next: Next) {
       exp: number;
     };
 
-    if (header.alg !== "RS256") return c.json({ error: "alg tidak didukung" }, 401);
-    if (payload.iss !== TEAM_DOMAIN) return c.json({ error: "issuer salah" }, 401);
+    if (header.alg !== "RS256") {
+      console.log("access deny: alg =", header.alg);
+      return c.json({ error: "alg tidak didukung" }, 401);
+    }
+    if (payload.iss !== TEAM_DOMAIN) {
+      console.log("access deny: iss =", payload.iss);
+      return c.json({ error: "issuer salah" }, 401);
+    }
     const audOk = payload.aud === aud || (Array.isArray(payload.aud) && payload.aud.includes(aud));
-    if (!audOk) return c.json({ error: "audience mismatch" }, 401);
-    if (payload.exp * 1000 < Date.now()) return c.json({ error: "token kadaluarsa" }, 401);
+    if (!audOk) {
+      console.log("access deny: aud jwt =", JSON.stringify(payload.aud), "| vars =", aud);
+      return c.json({ error: "audience mismatch" }, 401);
+    }
+    if (payload.exp * 1000 < Date.now()) {
+      console.log("access deny: exp =", payload.exp, "| now =", Date.now() / 1000);
+      return c.json({ error: "token kadaluarsa" }, 401);
+    }
 
     const key = await getCertKey(header.kid);
+    const enc = new TextEncoder();
+    const data = enc.encode(`${hB64}.${pB64}`);
     const ok = await crypto.subtle.verify(
       { name: "RSASSA-PKCS1-v1_5" },
       key,
       b64urlToBuffer(sB64),
-      b64urlToBuffer(`${hB64}.${pB64}`),
+      data,
     );
-    if (!ok) return c.json({ error: "signature tidak valid" }, 401);
+    if (!ok) {
+      console.log("access deny: signature tidak valid | kid =", header.kid);
+      return c.json({ error: "signature tidak valid" }, 401);
+    }
 
     return next();
-  } catch {
+  } catch (e) {
+    console.log("access deny: exception =", e instanceof Error ? e.message : String(e));
     return c.json({ error: "unauthorized" }, 401);
   }
 }
@@ -69,13 +90,19 @@ async function getCertKey(kid: string): Promise<CryptoKey> {
 }
 
 function b64urlToBuffer(s: string): ArrayBuffer {
-  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+  const bin = atob(padB64url(s));
   const buf = new ArrayBuffer(bin.length);
-  const view = new Uint8Array(buf);
-  for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+  const arr = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return buf;
 }
 
 function b64urlDecode(s: string): string {
-  return atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+  return atob(padB64url(s));
+}
+
+/** JWT memakai base64url TANPA padding; atob() menuntut kelipatan 4. */
+export function padB64url(s: string): string {
+  const std = s.replace(/-/g, "+").replace(/_/g, "/");
+  return std + "=".repeat((4 - (std.length % 4)) % 4);
 }
