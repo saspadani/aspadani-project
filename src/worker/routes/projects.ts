@@ -9,6 +9,17 @@ export const projectRoutes = new Hono<{ Bindings: Env }>();
 const DEFAULT_COLUMNS = ["Backlog", "Sedang Dikerjakan", "Selesai"];
 
 /** List project aktif + jumlah task aktif (subquery ter-index). */
+/** List kolom terurut (ringan — untuk quick-add). */
+projectRoutes.get("/:id/columns", async (c) => {
+  const projectId = c.req.param("id");
+  const cols = await db(c.env)
+    .select({ id: columns.id, name: columns.name, isDone: columns.isDone })
+    .from(columns)
+    .where(eq(columns.projectId, projectId))
+    .orderBy(asc(columns.sort));
+  return c.json({ columns: cols });
+});
+
 projectRoutes.get("/", async (c) => {
   const rows = await db(c.env)
     .select({

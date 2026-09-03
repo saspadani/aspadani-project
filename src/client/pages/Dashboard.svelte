@@ -1,11 +1,18 @@
 <script lang="ts">
   import { api } from "../lib/api";
-  import type { Project } from "../lib/types";
+  import type { Project, ColumnOption } from "../lib/types";
 
   let projects = $state<Project[]>([]);
   let newName = $state("");
   let busy = $state(false);
   let error = $state("");
+
+  // quick-add state: which project is expanded, drafts, columns cache
+  let quickAddId = $state<string | null>(null);
+  let quickTitle = $state("");
+  let quickColId = $state("");
+  let quickCols = $state<ColumnOption[]>([]);
+  let quickBusy = $state(false);
 
   async function load() {
     const data = await api<{ projects: Project[] }>("/api/projects");
@@ -30,12 +37,53 @@
       });
       projects = [...projects, { ...project, activeTaskCount: 0 }];
       newName = "";
-      open(project); // langsung ke board baru
+      open(project);
     } catch (err) {
       error = String(err instanceof Error ? err.message : err);
     } finally {
       busy = false;
     }
+  }
+
+  async function startQuickAdd(p: Project) {
+    quickAddId = p.id;
+    quickTitle = "";
+    quickBusy = false;
+    try {
+      const data = await api<{ columns: ColumnOption[] }>(
+        `/api/projects/${p.id}/columns`,
+      );
+      quickCols = data.columns;
+      quickColId = data.columns[0]?.id ?? "";
+    } catch {
+      error = "Gagal memuat kolom";
+    }
+  }
+
+  async function submitQuickAdd() {
+    if (!quickAddId || !quickTitle.trim() || !quickColId || quickBusy) return;
+    quickBusy = true;
+    try {
+      await api(`/api/projects/${quickAddId}/tasks`, {
+        method: "POST",
+        body: JSON.stringify({ title: quickTitle.trim(), columnId: quickColId }),
+      });
+      // update counter optimis
+      projects = projects.map((p) =>
+        p.id === quickAddId ? { ...p, activeTaskCount: (p.activeTaskCount ?? 0) + 1 } : p,
+      );
+      quickTitle = "";
+      quickAddId = null;
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err);
+    } finally {
+      quickBusy = false;
+    }
+  }
+
+  function cancelQuickAdd() {
+    quickAddId = null;
+    quickTitle = "";
   }
 
   async function archive(p: Project) {
@@ -84,10 +132,35 @@
             </span>
           </button>
           <div class="actions">
+            <button class="ghost" onclick={() => startQuickAdd(p)} title="Tambah tugas cepat">＋ tugas</button>
             <button class="ghost" onclick={(e) => { e.stopPropagation(); archive(p); }}>Arsipkan</button>
             <button class="ghost danger" onclick={(e) => { e.stopPropagation(); remove(p); }}>Hapus</button>
           </div>
         </li>
+
+        <!-- Quick-add inline -->
+        {#if quickAddId === p.id}
+          <li class="quick-add" style="--accent: {p.color}">
+            <form onsubmit={(e) => { e.preventDefault(); submitQuickAdd(); }}>
+              <input
+                type="text"
+                placeholder="Judul tugas…"
+                bind:value={quickTitle}
+                maxlength={140}
+                autofocus
+              />
+              <select bind:value={quickColId} aria-label="Pilih kolom">
+                {#each quickCols as c}
+                  <option value={c.id}>{c.name}</option>
+                {/each}
+              </select>
+              <button type="submit" disabled={quickBusy || !quickTitle.trim() || !quickColId}>
+                {quickBusy ? "…" : "Tambah"}
+              </button>
+              <button type="button" onclick={cancelQuickAdd}>Batal</button>
+            </form>
+          </li>
+        {/if}
       {/each}
     </ul>
   {/if}
@@ -215,5 +288,58 @@
   .err {
     color: #dc2626;
     font-size: 0.85rem;
+  }
+  .quick-add {
+    padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+  }
+  .quick-add form {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .quick-add input {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.85rem;
+  }
+  .quick-add input:focus {
+    outline: 2px solid var(--accent, #6366f1);
+    outline-offset: -1px;
+  }
+  .quick-add select {
+    padding: 0.45rem 0.5rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.85rem;
+    background: #fff;
+    max-width: 8rem;
+  }
+  .quick-add button {
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .quick-add button[type="submit"] {
+    background: var(--accent, #6366f1);
+    color: #fff;
+    border-color: var(--accent, #6366f1);
+  }
+  .quick-add button[type="submit"]:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .quick-add button[type="button"]:hover {
+    background: #f5f5f5;
   }
 </style>
