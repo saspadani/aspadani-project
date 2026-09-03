@@ -291,11 +291,15 @@
     align-items: baseline;
     gap: 1rem;
     padding: 1.25rem 1.5rem 0.5rem;
+    flex-wrap: wrap;
   }
   .back {
     color: #737373;
     text-decoration: none;
     font-size: 0.9rem;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
   .back:hover {
     color: #171717;
@@ -304,6 +308,9 @@
     font-size: 1.1rem;
     font-weight: 600;
     margin: 0;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
   .err {
     color: #dc2626;
@@ -372,6 +379,11 @@
     cursor: pointer;
     padding: 0.1rem 0.3rem;
     border-radius: 4px;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   button.mini:hover {
     background: #e5e5e5;
@@ -413,6 +425,7 @@
     padding: 0.55rem 0.7rem;
     font: inherit;
     cursor: pointer;
+    min-height: 44px;
   }
   .card:hover {
     border-color: #d4d4d4;
@@ -425,6 +438,7 @@
     display: flex;
     gap: 0.4rem;
     align-items: center;
+    flex-wrap: wrap;
   }
   .due {
     font-size: 0.72rem;
@@ -448,6 +462,7 @@
     font: inherit;
     font-size: 0.85rem;
     color: #737373;
+    min-height: 44px;
   }
   form.add input:focus,
   form.addcol input:focus {
@@ -470,9 +485,58 @@
     font: inherit;
     font-size: 0.85rem;
     color: #737373;
+    min-height: 44px;
   }
   .loading {
     color: #737373;
     padding: 2rem 1.5rem;
+  }
+
+  /* Mobile: vertical stack, full-width columns */
+  @media (max-width: 768px) {
+    header {
+      padding: 0.75rem 1rem 0.25rem;
+      gap: 0.5rem;
+    }
+    h1 {
+      font-size: 1rem;
+    }
+    .board-wrap {
+      flex-direction: column;
+      padding: 0.5rem 1rem 1.5rem;
+      gap: 0.5rem;
+    }
+    .board {
+      flex-direction: column;
+      overflow-x: visible;
+      gap: 0.5rem;
+      min-height: auto;
+    }
+    .col {
+      flex: 1 1 auto;
+      width: 100%;
+      max-height: none;
+    }
+    .col-actions {
+      flex-wrap: wrap;
+    }
+    form.addcol {
+      flex: 1 1 auto;
+      width: 100%;
+      padding-top: 0;
+    }
+    form.addcol input {
+      min-height: 48px;
+    }
+    .card {
+      padding: 0.65rem 0.8rem;
+    }
+    .title {
+      font-size: 0.95rem;
+    }
+    button.mini {
+      font-size: 0.85rem;
+      flex: 1;
+    }
   }
 </style>
