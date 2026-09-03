@@ -68,3 +68,28 @@ export const subtasks = sqliteTable(
   },
   (t) => [index("idx_subtasks_task").on(t.taskId, t.sort)],
 );
+
+export const recurringTasks = sqliteTable(
+  "recurring_tasks",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    columnId: text("column_id")
+      .notNull()
+      .references(() => columns.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    notes: text("notes").notNull().default(""),
+    priority: text("priority").notNull().default("none"),
+    freqType: text("freq_type").notNull().default("daily"), // daily | weekly | monthly
+    freqInterval: integer("freq_interval").notNull().default(1),
+    dayOfWeek: integer("day_of_week"), // 0-6 for weekly
+    dayOfMonth: integer("day_of_month"), // 1-31 for monthly
+    lastGeneratedDate: text("last_generated_date"),
+    active: integer("active").notNull().default(1),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [index("idx_recurring_project").on(t.projectId)],
+);

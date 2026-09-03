@@ -4,6 +4,7 @@ import { projectRoutes } from "./routes/projects";
 import { boardRoutes } from "./routes/board";
 import { taskRoutes } from "./routes/tasks";
 import { subtaskRoutes } from "./routes/subtasks";
+import { recurringRoutes } from "./routes/recurring";
 import { verifyAccess } from "./middleware/access";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -21,5 +22,6 @@ app.route("/api/projects", projectRoutes);
 app.route("/api", boardRoutes);
 app.route("/api", taskRoutes);
 app.route("/api", subtaskRoutes);
+app.route("/api", recurringRoutes);
 
 export default app;

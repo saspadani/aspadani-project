@@ -3,7 +3,7 @@
   import { dndzone } from "svelte-dnd-action";
   import { flip } from "svelte/animate";
   import { api } from "../lib/api";
-  import type { Column, Task } from "../lib/types";
+  import type { Column, Task, RecurringTask } from "../lib/types";
   import CardDetail from "./CardDetail.svelte";
 
   let { projectId }: { projectId: string } = $props();
@@ -20,6 +20,122 @@
   let adding = $state<Record<string, boolean>>({});
 
   let selected = $state<Task | null>(null);
+
+  // ---- recurring tasks UI state ----------------------------------------------
+  let showRecurring = $state(false);
+
+  // ---- recurring tasks ------------------------------------------------------
+  let recurring = $state<RecurringTask[]>([]);
+  let recurringLoaded = $state(false);
+  let showRecurringForm = $state(false);
+  let editingRecurring = $state<RecurringTask | null>(null);
+  let recurringForm = $state({
+    title: "",
+    notes: "",
+    priority: "none" as "none" | "low" | "med" | "high",
+    columnId: "",
+    freqType: "daily" as "daily" | "weekly" | "monthly",
+    freqInterval: 1,
+    dayOfWeek: 0,
+    dayOfMonth: 1,
+  });
+  let recurringBusy = $state(false);
+
+  async function loadRecurring() {
+    try {
+      const data = await api<{ recurring: RecurringTask[] }>(
+        `/api/projects/${projectId}/recurring`,
+      );
+      recurring = data.recurring;
+    } catch {
+      recurring = [];
+    } finally {
+      recurringLoaded = true;
+    }
+  }
+
+  $effect(() => {
+    if (showRecurring && !recurringLoaded) loadRecurring();
+  });
+
+  function resetRecurringForm() {
+    editingRecurring = null;
+    recurringForm = {
+      title: "",
+      notes: "",
+      priority: "none",
+      columnId: cols[0]?.id ?? "",
+      freqType: "daily",
+      freqInterval: 1,
+      dayOfWeek: 0,
+      dayOfMonth: 1,
+    };
+  }
+
+  function editRecurring(r: RecurringTask) {
+    editingRecurring = r;
+    showRecurringForm = true;
+    recurringForm = {
+      title: r.title,
+      notes: r.notes,
+      priority: r.priority,
+      columnId: r.columnId,
+      freqType: r.freqType,
+      freqInterval: r.freqInterval,
+      dayOfWeek: r.dayOfWeek ?? 0,
+      dayOfMonth: r.dayOfMonth ?? 1,
+    };
+  }
+
+  async function saveRecurring() {
+    const { title, columnId } = recurringForm;
+    if (!title.trim() || !columnId || recurringBusy) return;
+    recurringBusy = true;
+    try {
+      if (editingRecurring) {
+        const { recurring: updated } = await api<{ recurring: RecurringTask }>(
+          `/api/recurring/${editingRecurring.id}`,
+          { method: "PATCH", body: JSON.stringify(recurringForm) },
+        );
+        recurring = recurring.map((r) => (r.id === updated.id ? updated : r));
+      } else {
+        const { recurring: created } = await api<{ recurring: RecurringTask }>(
+          `/api/projects/${projectId}/recurring`,
+          { method: "POST", body: JSON.stringify(recurringForm) },
+        );
+        recurring = [...recurring, created];
+      }
+      showRecurringForm = false;
+      resetRecurringForm();
+    } catch {
+      error = "Gagal menyimpan recurring task";
+    } finally {
+      recurringBusy = false;
+    }
+  }
+
+  async function deleteRecurring(r: RecurringTask) {
+    if (!confirm(`Hapus recurring "${r.title}"?`)) return;
+    recurring = recurring.filter((x) => x.id !== r.id);
+    try {
+      await api(`/api/recurring/${r.id}`, { method: "DELETE" });
+    } catch {
+      recurring = [...recurring, r];
+    }
+  }
+
+  async function toggleRecurringActive(r: RecurringTask) {
+    const newActive = r.active === 1 ? 0 : 1;
+    recurring = recurring.map((x) => (x.id === r.id ? { ...x, active: newActive } : x));
+    try {
+      await api(`/api/recurring/${r.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: newActive === 1 }),
+      });
+    } catch {
+      recurring = recurring.map((x) => (x.id === r.id ? { ...x, active: r.active } : x));
+    }
+  }
 
   // ---- quick complete -------------------------------------------------------
   let completing = $state<Set<string>>(new Set());
@@ -300,6 +416,14 @@
           <option value="priority">Prioritas</option>
         </select>
       </label>
+      <button
+        class="recurring-btn"
+        class:active={showRecurring}
+        onclick={() => showRecurring = !showRecurring}
+        title="Kelola task berulang"
+      >
+        🔁 Recurring
+      </button>
     </div>
   </header>
   {#if error}<p class="err">{error}</p>{/if}
@@ -408,6 +532,137 @@
   {/if}
 </main>
 
+{#if showRecurring}
+  <div class="recurring-panel">
+    <div class="recurring-header">
+      <h3>Task Berulang</h3>
+      <div class="recurring-actions">
+        {#if !showRecurringForm}
+          <button class="add-recurring" onclick={() => { resetRecurringForm(); showRecurringForm = true; }}>
+            + Baru
+          </button>
+        {:else}
+          <button class="cancel-recurring" onclick={() => { showRecurringForm = false; resetRecurringForm(); }}>
+            Batal
+          </button>
+        {/if}
+        <button class="close-recurring" onclick={() => showRecurring = false}>✕</button>
+      </div>
+    </div>
+
+    {#if showRecurringForm}
+      <form class="recurring-form" onsubmit={(e) => { e.preventDefault(); saveRecurring(); }}>
+        <label>
+          <span>Judul</span>
+          <input bind:value={recurringForm.title} maxlength={140} placeholder="Task berulang…" />
+        </label>
+        <div class="form-row">
+          <label>
+            <span>Kolom</span>
+            <select bind:value={recurringForm.columnId}>
+              {#each cols as c}
+                <option value={c.id}>{c.name}</option>
+              {/each}
+            </select>
+          </label>
+          <label>
+            <span>Frekuensi</span>
+            <select bind:value={recurringForm.freqType}>
+              <option value="daily">Harian</option>
+              <option value="weekly">Mingguan</option>
+              <option value="monthly">Bulanan</option>
+            </select>
+          </label>
+        </div>
+
+        {#if recurringForm.freqType === "daily"}
+          <label>
+            <span>Setiap (hari)</span>
+            <input type="number" bind:value={recurringForm.freqInterval} min={1} max={365} />
+          </label>
+        {:else if recurringForm.freqType === "weekly"}
+          <label>
+            <span>Hari dalam seminggu</span>
+            <select bind:value={recurringForm.dayOfWeek}>
+              <option value={0}>Minggu</option>
+              <option value={1}>Senin</option>
+              <option value={2}>Selasa</option>
+              <option value={3}>Rabu</option>
+              <option value={4}>Kamis</option>
+              <option value={5}>Jumat</option>
+              <option value={6}>Sabtu</option>
+            </select>
+          </label>
+        {:else if recurringForm.freqType === "monthly"}
+          <label>
+            <span>Tanggal dalam bulan</span>
+            <input type="number" bind:value={recurringForm.dayOfMonth} min={1} max={31} />
+          </label>
+        {/if}
+
+        <div class="form-row">
+          <label>
+            <span>Prioritas</span>
+            <select bind:value={recurringForm.priority}>
+              <option value="none">—</option>
+              <option value="low">Rendah</option>
+              <option value="med">Sedang</option>
+              <option value="high">Tinggi</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          <span>Catatan</span>
+          <textarea bind:value={recurringForm.notes} rows={2} placeholder="Catatan tambahan…"></textarea>
+        </label>
+
+        <button type="submit" class="save-recurring" disabled={recurringBusy || !recurringForm.title.trim()}>
+          {recurringBusy ? "Menyimpan…" : (editingRecurring ? "Simpan Perubahan" : "Buat Task Berulang")}
+        </button>
+      </form>
+    {/if}
+
+    {#if recurringLoaded && recurring.length === 0 && !showRecurringForm}
+      <p class="recurring-empty">Belum ada task berulang. Klik "+ Baru" untuk membuat.</p>
+    {:else if recurring.length > 0}
+      <ul class="recurring-list">
+        {#each recurring as r (r.id)}
+          <li class="recurring-item">
+            <button
+              class="recurring-toggle"
+              class:inactive={r.active === 0}
+              onclick={() => toggleRecurringActive(r)}
+              title={r.active === 1 ? "Nonaktifkan" : "Aktifkan"}
+            >
+              {r.active === 1 ? "✓" : "○"}
+            </button>
+            <div class="recurring-info">
+              <strong class="recurring-title">{r.title}</strong>
+              <span class="recurring-freq">
+                {#if r.freqType === "daily"}
+                  Setiap {r.freqInterval > 1 ? `${r.freqInterval} hari` : "hari"}
+                {:else if r.freqType === "weekly"}
+                  Setiap hari {["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"][r.dayOfWeek ?? 0]}
+                {:else if r.freqType === "monthly"}
+                  Setiap tanggal {r.dayOfMonth}
+                {/if}
+              </span>
+            </div>
+            <div class="recurring-item-actions">
+              {#if r.priority !== "none"}
+                <span class="prio prio-{r.priority}">{r.priority}</span>
+              {/if}
+              <button class="edit-recurring" onclick={() => editRecurring(r)}>Edit</button>
+              <button class="delete-recurring" onclick={() => deleteRecurring(r)}>Hapus</button>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+{/if}
+
 {#if selected}
   <CardDetail
     task={selected}
@@ -474,6 +729,25 @@
   .controls select:focus {
     outline: 2px solid #6366f1;
     outline-offset: -1px;
+  }
+  .recurring-btn {
+    padding: 0.35rem 0.65rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #525252;
+    white-space: nowrap;
+  }
+  .recurring-btn:hover {
+    background: #f5f5f5;
+  }
+  .recurring-btn.active {
+    background: #eef2ff;
+    border-color: #6366f1;
+    color: #4f46e5;
   }
   .err {
     color: #dc2626;
@@ -757,4 +1031,197 @@
       flex: 1;
     }
   }
+
+  /* Recurring panel */
+  .recurring-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(24rem, 92vw);
+    height: 100vh;
+    background: #fff;
+    border-left: 1px solid #e5e5e5;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  }
+  .recurring-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+  }
+  .recurring-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+  .recurring-actions {
+    display: flex;
+    gap: 0.4rem;
+  }
+  .recurring-actions button {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .recurring-actions button:hover {
+    background: #f5f5f5;
+  }
+  .add-recurring {
+    background: #6366f1 !important;
+    color: #fff !important;
+    border-color: #6366f1 !important;
+  }
+  .add-recurring:hover {
+    background: #4f46e5 !important;
+  }
+  .recurring-form {
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    overflow-y: auto;
+  }
+  .recurring-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: #525252;
+  }
+  .recurring-form input,
+  .recurring-form select,
+  .recurring-form textarea {
+    padding: 0.4rem 0.55rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.85rem;
+  }
+  .recurring-form input:focus,
+  .recurring-form select:focus,
+  .recurring-form textarea:focus {
+    outline: 2px solid #6366f1;
+    outline-offset: -1px;
+  }
+  .form-row {
+    display: flex;
+    gap: 0.75rem;
+  }
+  .form-row label {
+    flex: 1;
+  }
+  .save-recurring {
+    padding: 0.5rem;
+    border: none;
+    border-radius: 6px;
+    background: #6366f1;
+    color: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .save-recurring:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .save-recurring:not(:disabled):hover {
+    background: #4f46e5;
+  }
+  .recurring-empty {
+    padding: 1.5rem 1.25rem;
+    color: #737373;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+  .recurring-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1;
+    overflow-y: auto;
+  }
+  .recurring-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .recurring-toggle {
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: #10b981;
+    flex-shrink: 0;
+  }
+  .recurring-toggle.inactive {
+    color: #a3a3a3;
+  }
+  .recurring-toggle:hover {
+    border-color: #10b981;
+  }
+  .recurring-toggle.inactive:hover {
+    border-color: #a3a3a3;
+  }
+  .recurring-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .recurring-title {
+    font-size: 0.88rem;
+    font-weight: 500;
+  }
+  .recurring-freq {
+    font-size: 0.75rem;
+    color: #737373;
+  }
+  .recurring-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+  .recurring-item-actions button {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #d4d4d4;
+    border-radius: 4px;
+    background: #fff;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .recurring-item-actions button:hover {
+    background: #f5f5f5;
+  }
+  .delete-recurring:hover {
+    color: #dc2626;
+    border-color: #dc2626;
+  }
+  .prio {
+    font-size: 0.68rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    color: #fff;
+  }
+  .prio-low { background: #6b7280; }
+  .prio-med { background: #d97706; }
+  .prio-high { background: #dc2626; }
 </style>

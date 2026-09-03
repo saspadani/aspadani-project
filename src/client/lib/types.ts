@@ -54,3 +54,20 @@ export type Subtask = {
   sort: number;
   createdAt: string;
 };
+
+export type RecurringTask = {
+  id: string;
+  projectId: string;
+  columnId: string;
+  title: string;
+  notes: string;
+  priority: "none" | "low" | "med" | "high";
+  freqType: "daily" | "weekly" | "monthly";
+  freqInterval: number;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  lastGeneratedDate: string | null;
+  active: number;
+  createdAt: string;
+  updatedAt: string;
+};

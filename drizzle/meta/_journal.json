@@ -15,6 +15,13 @@
       "when": 1788400946071,
       "tag": "0001_breezy_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788401739148,
+      "tag": "0002_quiet_archangel",
+      "breakpoints": true
     }
   ]
 }

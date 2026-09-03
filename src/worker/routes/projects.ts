@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { eq, asc, sql } from "drizzle-orm";
+import { eq, asc, sql, and } from "drizzle-orm";
 import type { Env } from "../types";
 import { db } from "../db";
-import { projects, columns } from "../db/schema";
+import { projects, columns, tasks } from "../db/schema";
 
 export const projectRoutes = new Hono<{ Bindings: Env }>();
 
