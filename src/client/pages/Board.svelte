@@ -20,6 +20,41 @@
 
   let selected = $state<Task | null>(null);
 
+  // ---- quick complete -------------------------------------------------------
+  let completing = $state<Set<string>>(new Set());
+
+  /** Cari kolom selesai (isDone=1) pertama di project ini. */
+  function findDoneColumn(): string | null {
+    const doneCol = cols.find((c) => c.isDone === 1);
+    return doneCol?.id ?? null;
+  }
+
+  async function quickComplete(t: Task) {
+    if (completing.has(t.id)) return;
+    const targetColId = findDoneColumn();
+    if (!targetColId || targetColId === t.columnId) return; // sudah di kolom selesai
+
+    completing.add(t.id);
+    try {
+      // Optimistic: pindahkan ke kolom target secara lokal
+      cols = cols.map((c) => {
+        if (c.id === t.columnId) return { ...c, cards: c.cards.filter((x) => x.id !== t.id) };
+        if (c.id === targetColId) return { ...c, cards: [...c.cards, { ...t, columnId: targetColId }] };
+        return c;
+      });
+      await api(`/api/tasks/${t.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ columnId: targetColId }),
+      });
+      queueOrderSync();
+    } catch {
+      error = "Gagal menyelesaikan task";
+      load();
+    } finally {
+      completing.delete(t.id);
+    }
+  }
+
   // ---- filter & sort --------------------------------------------------------
   type PrioFilter = "all" | "none" | "low" | "med" | "high";
   type SortMode = "manual" | "dueDate" | "priority";
@@ -316,6 +351,16 @@
                       {#if t.priority !== 'none'}<span class="prio prio-{t.priority}">{t.priority}</span>{/if}
                     </span>
                   </div>
+                  {#if c.isDone !== 1}
+                    <button
+                      class="quick-complete"
+                      title="Selesai"
+                      disabled={completing.has(t.id)}
+                      onclick={(e) => { e.stopPropagation(); quickComplete(t); }}
+                    >
+                      {completing.has(t.id) ? "…" : "✓"}
+                    </button>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -502,6 +547,9 @@
   }
   .card-item {
     list-style: none;
+    display: flex;
+    align-items: stretch;
+    gap: 0.35rem;
   }
   .card {
     display: flex;
@@ -528,6 +576,38 @@
   .card.due-soon {
     border-left: 3px solid #f59e0b;
     background: #fffbeb;
+  }
+  .card-item {
+    list-style: none;
+    display: flex;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+  .quick-complete {
+    flex: none;
+    width: 2rem;
+    align-self: stretch;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 0.9rem;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 0;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .quick-complete:hover {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #059669;
+  }
+  .quick-complete:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .title {
     font-size: 0.88rem;
