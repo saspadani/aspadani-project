@@ -28,6 +28,18 @@
 
   const PRIO_RANK: Record<string, number> = { none: 0, low: 1, med: 2, high: 3 };
 
+  /** Status tenggat dibandingkan hari ini. */
+  function dueStatus(dueDate: string | null): "overdue" | "soon" | null {
+    if (!dueDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate + "T00:00:00");
+    const diffDays = (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+    if (diffDays < 0) return "overdue";
+    if (diffDays <= 2) return "soon";
+    return null;
+  }
+
   /** Filter + sort kolom secara reaktif setiap state berubah. */
   let visibleCols = $derived.by(() => {
     return cols.map((c) => {
@@ -286,10 +298,13 @@
               }}
             >
               {#each c.cards as t (t.id)}
+                {@const status = dueStatus(t.dueDate)}
                 <li class="card-item" animate:flip={{ duration: FLIP_MS }}>
                   <!-- div role=button, BUKAN <button>: HTMLButtonElement.value membuat drag ditolak library -->
                   <div
                     class="card"
+                    class:due-overdue={status === "overdue"}
+                    class:due-soon={status === "soon"}
                     role="button"
                     tabindex="0"
                     onclick={() => (selected = t)}
@@ -297,7 +312,7 @@
                   >
                     <span class="title">{t.title}</span>
                     <span class="meta">
-                      {#if t.dueDate}<span class="due">📅 {t.dueDate}</span>{/if}
+                      {#if t.dueDate}<span class="due {status ? `due-${status}` : ''}">📅 {t.dueDate}</span>{/if}
                       {#if t.priority !== 'none'}<span class="prio prio-{t.priority}">{t.priority}</span>{/if}
                     </span>
                   </div>
@@ -506,6 +521,14 @@
   .card:hover {
     border-color: #d4d4d4;
   }
+  .card.due-overdue {
+    border-left: 3px solid #ef4444;
+    background: #fef2f2;
+  }
+  .card.due-soon {
+    border-left: 3px solid #f59e0b;
+    background: #fffbeb;
+  }
   .title {
     font-size: 0.88rem;
     color: #171717;
@@ -519,6 +542,14 @@
   .due {
     font-size: 0.72rem;
     color: #737373;
+  }
+  .due-overdue {
+    color: #dc2626;
+    font-weight: 600;
+  }
+  .due-soon {
+    color: #d97706;
+    font-weight: 600;
   }
   .prio {
     font-size: 0.68rem;
