@@ -10,6 +10,33 @@ const DEFAULT_COLUMNS = ["Backlog", "Sedang Dikerjakan", "Selesai"];
 
 /** List project aktif + jumlah task aktif (subquery ter-index). */
 /** List kolom terurut (ringan — untuk quick-add). */
+/** Search tasks by title/notes across all projects. */
+projectRoutes.get("/search", async (c) => {
+  const q = new URL(c.req.url).searchParams.get("q")?.trim();
+  if (!q) return c.json({ results: [] });
+
+  const like = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+  const rows = await db(c.env)
+    .select({
+      taskId: tasks.id,
+      taskTitle: tasks.title,
+      taskNotes: tasks.notes,
+      taskPriority: tasks.priority,
+      taskDueDate: tasks.dueDate,
+      projectId: projects.id,
+      projectName: projects.name,
+      projectColor: projects.color,
+      colName: columns.name,
+    })
+    .from(tasks)
+    .innerJoin(columns, eq(tasks.columnId, columns.id))
+    .innerJoin(projects, and(eq(tasks.projectId, projects.id), eq(projects.archived, 0)))
+    .where(sql`(${tasks.title} LIKE ${like} ESCAPE '\\' OR ${tasks.notes} LIKE ${like} ESCAPE '\\')`)
+    .orderBy(projects.sort, tasks.sort)
+    .limit(50);
+  return c.json({ results: rows });
+});
+
 projectRoutes.get("/:id/columns", async (c) => {
   const projectId = c.req.param("id");
   const cols = await db(c.env)

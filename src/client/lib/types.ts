@@ -23,6 +23,18 @@ export type ColumnOption = {
   isDone: number;
 };
 
+export type SearchResult = {
+  taskId: string;
+  taskTitle: string;
+  taskNotes: string;
+  taskPriority: "none" | "low" | "med" | "high";
+  taskDueDate: string | null;
+  projectId: string;
+  projectName: string;
+  projectColor: string;
+  colName: string;
+};
+
 export type Task = {
   id: string;
   projectId: string;
