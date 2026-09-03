@@ -686,7 +686,7 @@
     flex-wrap: wrap;
   }
   .back {
-    color: #737373;
+    color: #525252;
     text-decoration: none;
     font-size: 0.9rem;
     min-height: 44px;
@@ -719,18 +719,19 @@
     font-weight: 500;
   }
   .controls select {
-    padding: 0.35rem 0.5rem;
+    padding: 0.35rem 1.7rem 0.35rem 0.5rem;
     border: 1px solid #d4d4d4;
     border-radius: 6px;
     font: inherit;
     font-size: 0.85rem;
-    background: #fff;
+    background-color: #fff;
   }
   .controls select:focus {
     outline: 2px solid #6366f1;
     outline-offset: -1px;
   }
   .recurring-btn {
+    margin-left: 0.6rem;
     padding: 0.35rem 0.65rem;
     border: 1px solid #d4d4d4;
     border-radius: 6px;
@@ -762,7 +763,7 @@
   }
   .board {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 0.75rem;
     overflow-x: auto;
     padding-bottom: 0.5rem;
@@ -771,6 +772,7 @@
   }
   .col {
     flex: 0 0 17rem;
+    min-height: 15rem;
     background: #f0f0f0;
     border: 1px solid #e5e5e5;
     border-radius: 10px;
@@ -799,7 +801,7 @@
   }
   .count {
     font-size: 0.75rem;
-    color: #737373;
+    color: #525252;
     background: #fff;
     border-radius: 999px;
     padding: 0.05rem 0.5rem;
@@ -811,7 +813,7 @@
   button.mini {
     border: none;
     background: none;
-    color: #a3a3a3;
+    color: #525252;
     font-size: 0.72rem;
     cursor: pointer;
     padding: 0.1rem 0.3rem;

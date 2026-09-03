@@ -129,7 +129,7 @@
     </label>
     <label>
       Catatan
-      <textarea bind:value={form.notes} rows={5} placeholder="Detil, tautan, dsb."></textarea>
+      <textarea bind:value={form.notes} rows={5} placeholder="Detail, tautan, dsb."></textarea>
     </label>
     <div class="row">
       <label>
@@ -235,6 +235,13 @@
     border: 1px solid #d4d4d4;
     border-radius: 6px;
     padding: 0.45rem 0.6rem;
+    min-height: 44px;
+  }
+  textarea {
+    min-height: 0;
+  }
+  select {
+    padding-right: 1.7rem;
   }
   input:focus,
   textarea:focus,
@@ -415,7 +422,9 @@
     cursor: pointer;
   }
   .add-subtask button:disabled {
-    opacity: 0.5;
+    color: #9ca3af;
+    background: #fafafa;
+    border-color: #e5e5e5;
     cursor: default;
   }
   .add-subtask button:not(:disabled):hover {

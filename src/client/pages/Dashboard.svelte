@@ -408,7 +408,7 @@
   button.ghost {
     border: none;
     background: none;
-    color: #737373;
+    color: #525252;
     font-size: 0.82rem;
     cursor: pointer;
     padding: 0.25rem 0.4rem;
@@ -455,13 +455,13 @@
     outline-offset: -1px;
   }
   .quick-add select {
-    padding: 0.45rem 0.5rem;
+    padding: 0.45rem 1.7rem 0.45rem 0.5rem;
     border: 1px solid #d4d4d4;
     border-radius: 6px;
     font: inherit;
     font-size: 0.85rem;
-    background: #fff;
-    max-width: 8rem;
+    background-color: #fff;
+    max-width: 9rem;
   }
   .quick-add button {
     padding: 0.45rem 0.7rem;
