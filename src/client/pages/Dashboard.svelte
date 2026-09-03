@@ -189,6 +189,48 @@
       body: JSON.stringify({ archived: true }),
     });
     projects = projects.filter((x) => x.id !== p.id);
+    archived = [p, ...archived]; // muncul di daftar arsip tanpa reload
+  }
+
+  // ---- arsip ------------------------------------------------------------------
+  let showArchive = $state(false);
+  let archived = $state<Project[]>([]);
+  let archiveLoaded = $state(false);
+
+  async function toggleArchive() {
+    showArchive = !showArchive;
+    if (showArchive && !archiveLoaded) {
+      try {
+        const data = await api<{ projects: Project[] }>("/api/projects/archived");
+        archived = data.projects;
+        archiveLoaded = true;
+      } catch (err) {
+        error = String(err instanceof Error ? err.message : err);
+      }
+    }
+  }
+
+  async function restore(p: Project) {
+    try {
+      await api(`/api/projects/${p.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ archived: false }),
+      });
+      archived = archived.filter((x) => x.id !== p.id);
+      projects = [...projects, { ...p, activeTaskCount: 0 }];
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err);
+    }
+  }
+
+  async function removeArchived(p: Project) {
+    if (!confirm(`Hapus PERMANEN "${p.name}" dari arsip beserta semua tugasnya?`)) return;
+    try {
+      await api(`/api/projects/${p.id}`, { method: "DELETE" });
+      archived = archived.filter((x) => x.id !== p.id);
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err);
+    }
   }
 
   async function remove(p: Project) {
@@ -306,6 +348,36 @@
       {/each}
     </ul>
   {/if}
+
+  <!-- Section Arsip (collapsible) -->
+  <section class="archive">
+    <button class="archive-toggle" onclick={toggleArchive} aria-expanded={showArchive}>
+      <span class="caret" class:open={showArchive}>▸</span> Arsip
+    </button>
+    {#if showArchive}
+      {#if archived.length === 0}
+        <p class="archive-empty">Tidak ada proyek terarsip.</p>
+      {:else}
+        <ul>
+          {#each archived as p (p.id)}
+            <li style="--accent: {p.color}">
+              <button class="row" onclick={() => restore(p)} title="Klik untuk pulihkan ke daftar aktif">
+                <span class="dot"></span>
+                <span class="info">
+                  <strong>{p.name}</strong>
+                  <small>terarsip</small>
+                </span>
+              </button>
+              <div class="actions">
+                <button class="ghost" onclick={(e) => { e.stopPropagation(); restore(p); }}>Pulihkan</button>
+                <button class="ghost danger" onclick={(e) => { e.stopPropagation(); removeArchived(p); }}>Hapus permanen</button>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
+  </section>
 </main>
 
 <style>
@@ -624,4 +696,48 @@
   .prio-low { background: #6b7280; }
   .prio-med { background: #d97706; }
   .prio-high { background: #dc2626; }
+
+  /* Arsip */
+  .archive {
+    margin-top: 2rem;
+    border-top: 1px solid #e5e5e5;
+    padding-top: 0.75rem;
+  }
+  .archive-toggle {
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #525252;
+    cursor: pointer;
+    padding: 0.35rem 0.45rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .archive-toggle:hover {
+    background: #f0f0f0;
+  }
+  .caret {
+    display: inline-block;
+    transition: transform 0.15s;
+    font-size: 0.7rem;
+  }
+  .caret.open {
+    transform: rotate(90deg);
+  }
+  .archive-empty {
+    color: #8a8a8a;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.45rem;
+    margin: 0;
+  }
+  .archive ul {
+    margin-top: 0.5rem;
+  }
+  .archive li .info small {
+    font-style: italic;
+  }
 </style>

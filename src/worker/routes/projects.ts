@@ -8,6 +8,24 @@ export const projectRoutes = new Hono<{ Bindings: Env }>();
 
 const DEFAULT_COLUMNS = ["Backlog", "Sedang Dikerjakan", "Selesai"];
 
+/** List project TERARSIP (untuk section Arsip di dashboard). */
+projectRoutes.get("/archived", async (c) => {
+  const rows = await db(c.env)
+    .select({
+      id: projects.id,
+      name: projects.name,
+      color: projects.color,
+      sort: projects.sort,
+      createdAt: projects.createdAt,
+      updatedAt: projects.updatedAt,
+    })
+    .from(projects)
+    .where(eq(projects.archived, 1))
+    .orderBy(sql`${projects.updatedAt} DESC`)
+    .limit(100);
+  return c.json({ projects: rows });
+});
+
 /** List project aktif + jumlah task aktif (subquery ter-index). */
 /** List kolom terurut (ringan — untuk quick-add). */
 /** Search tasks by title/notes across all projects. */
