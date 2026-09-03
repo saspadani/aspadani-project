@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { dndzone } from "svelte-dnd-action";
   import { flip } from "svelte/animate";
   import { api } from "../lib/api";
@@ -248,6 +249,32 @@
     }));
     selected = updated;
   }
+
+  // ---- keyboard shortcuts ---------------------------------------------------
+  function handleKeydown(e: KeyboardEvent) {
+    // Ignore if user is typing in input/textarea
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    if (e.key === "Escape") {
+      selected = null;
+      renaming = null;
+      return;
+    }
+
+    if (e.key === "n" || e.key === "N") {
+      e.preventDefault();
+      // Focus the first add-card input
+      const firstInput = document.querySelector("form.add input") as HTMLInputElement;
+      firstInput?.focus();
+      return;
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener("keydown", handleKeydown);
+    return () => document.removeEventListener("keydown", handleKeydown);
+  });
 </script>
 
 <main class="board-page">

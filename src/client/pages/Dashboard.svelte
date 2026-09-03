@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { api } from "../lib/api";
   import type { Project, ColumnOption, SearchResult } from "../lib/types";
 
@@ -84,6 +85,40 @@
     query = "";
     results = [];
   }
+
+  // ---- keyboard shortcuts ---------------------------------------------------
+  function handleKeydown(e: KeyboardEvent) {
+    const tag = (e.target as HTMLElement).tagName;
+    const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+    if (e.key === "Escape") {
+      if (searchOpen) closeSearch();
+      return;
+    }
+
+    if (isTyping) return;
+
+    if (e.key === "/") {
+      e.preventDefault();
+      if (!searchOpen) searchOpen = true;
+      setTimeout(() => {
+        const el = document.querySelector(".search-input-wrap input") as HTMLInputElement;
+        el?.focus();
+      }, 50);
+      return;
+    }
+
+    if (e.key === "n" || e.key === "N") {
+      e.preventDefault();
+      const el = document.querySelector(".new input") as HTMLInputElement;
+      el?.focus();
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener("keydown", handleKeydown);
+    return () => document.removeEventListener("keydown", handleKeydown);
+  });
 
   async function create(e: SubmitEvent) {
     e.preventDefault();
