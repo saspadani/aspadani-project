@@ -149,11 +149,10 @@
   async function quickComplete(t: Task) {
     if (completing.has(t.id)) return;
     const targetColId = findDoneColumn();
-    if (!targetColId || targetColId === t.columnId) return; // sudah di kolom selesai
+    if (!targetColId || targetColId === t.columnId) return;
 
     completing.add(t.id);
     try {
-      // Optimistic: pindahkan ke kolom target secara lokal
       cols = cols.map((c) => {
         if (c.id === t.columnId) return { ...c, cards: c.cards.filter((x) => x.id !== t.id) };
         if (c.id === targetColId) return { ...c, cards: [...c.cards, { ...t, columnId: targetColId }] };
@@ -192,6 +191,18 @@
     return null;
   }
 
+  /** Cek apakah kolom sudah melebihi WIP limit */
+  function isWipExceeded(col: ColVM): boolean {
+    if (col.wipLimit < 0) return false; // -1 = no limit
+    return col.cards.length > col.wipLimit;
+  }
+
+  /** Cek apakah kolom penuh (WIP limit reached) */
+  function isWipFull(col: ColVM): boolean {
+    if (col.wipLimit < 0) return false;
+    return col.cards.length >= col.wipLimit;
+  }
+
   /** Filter + sort kolom secara reaktif setiap state berubah. */
   let visibleCols = $derived.by(() => {
     return cols.map((c) => {
@@ -201,7 +212,7 @@
       }
       if (sortMode === "dueDate") {
         cards = [...cards].sort((a, b) => {
-          if (!a.dueDate) return 1; // tanpa tenggat → bawah
+          if (!a.dueDate) return 1;
           if (!b.dueDate) return 1;
           if (a.dueDate === b.dueDate) return 0;
           return a.dueDate < b.dueDate ? -1 : 1;
@@ -326,10 +337,42 @@
     }
   }
 
+  async function toggleBlocked(c: ColVM) {
+    const isBlocked = c.isBlocked === 1;
+    try {
+      await api(`/api/columns/${c.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isBlocked: !isBlocked }),
+      });
+      cols = cols.map((x) => (x.id === c.id ? { ...x, isBlocked: isBlocked ? 0 : 1 } : x));
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err);
+    }
+  }
+
+  async function setWipLimit(c: ColVM, limit: number) {
+    try {
+      await api(`/api/columns/${c.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ wipLimit: limit }),
+      });
+      cols = cols.map((x) => (x.id === c.id ? { ...x, wipLimit: limit } : x));
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err);
+    }
+  }
+
   // ---- aksi kartu ------------------------------------------------------------
   async function addCard(c: ColVM) {
     const title = (drafts[c.id] ?? "").trim();
     if (!title || adding[c.id]) return;
+
+    // Check WIP limit before adding
+    if (isWipFull(c)) {
+      error = `WIP limit reached! Complete current tasks before adding new ones.`;
+      return;
+    }
+
     adding[c.id] = true;
     try {
       const { task } = await api<{ task: Task }>(`/api/projects/${projectId}/tasks`, {
@@ -366,9 +409,24 @@
     selected = updated;
   }
 
+  async function toggleTaskBlocked(t: Task) {
+    const newBlocked = t.isBlocked === 1 ? 0 : 1;
+    try {
+      await api(`/api/tasks/${t.id}/block`, {
+        method: "PATCH",
+        body: JSON.stringify({ isBlocked: newBlocked === 1 }),
+      });
+      cols = cols.map((c) => ({
+        ...c,
+        cards: c.cards.map((x) => (x.id === t.id ? { ...x, isBlocked: newBlocked } : x)),
+      }));
+    } catch {
+      error = "Gagal update blocked status";
+    }
+  }
+
   // ---- keyboard shortcuts ---------------------------------------------------
   function handleKeydown(e: KeyboardEvent) {
-    // Ignore if user is typing in input/textarea
     const tag = (e.target as HTMLElement).tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
@@ -380,7 +438,6 @@
 
     if (e.key === "n" || e.key === "N") {
       e.preventDefault();
-      // Focus the first add-card input
       const firstInput = document.querySelector("form.add input") as HTMLInputElement;
       firstInput?.focus();
       return;
@@ -438,10 +495,14 @@
         onfinalize={onColumnFinalize}
       >
         {#each visibleCols as c (c.id)}
-          <li class="col" animate:flip={{ duration: FLIP_MS }}>
+          <li
+            class="col"
+            class:wip-exceeded={isWipExceeded(c)}
+            class:blocked-col={c.isBlocked === 1}
+            animate:flip={{ duration: FLIP_MS }}
+          >
             <div class="col-head">
               {#if renaming === c.id}
-                <!-- svelte-ignore a11y_autofocus -->
                 <input
                   class="rename"
                   bind:value={renameValue}
@@ -453,7 +514,6 @@
                   autofocus
                 />
               {:else}
-                <!-- div role=button: svelte-dnd-action menolak drag pada elemen ber-.value (button/input) -->
                 <div
                   class="colname"
                   role="button"
@@ -462,14 +522,26 @@
                   onclick={() => startRename(c)}
                   onkeydown={(e) => e.key === "Enter" && startRename(c)}
                 >
+                  {#if c.isBlocked === 1}<span class="blocked-icon">🚫</span>{/if}
                   {c.name}
                 </div>
               {/if}
-              <span class="count">{c.cards.length}</span>
+              <span class="count" class:wip-warn={isWipFull(c)} class:wip-exceeded={isWipExceeded(c)}>
+                {c.cards.length}{#if c.wipLimit >= 0}/{c.wipLimit}{/if}
+              </span>
             </div>
             <div class="col-actions">
               <button class="mini" onclick={() => toggleDone(c)}>
                 {c.isDone ? "selesai ✓" : "tandai selesai"}
+              </button>
+              <button class="mini" onclick={() => toggleBlocked(c)} class:active={c.isBlocked === 1}>
+                {c.isBlocked ? "🚫 Blocked" : "Block"}
+              </button>
+              <button class="mini" onclick={() => {
+                const limit = prompt("WIP Limit (-1 untuk tidak ada):", String(c.wipLimit));
+                if (limit !== null) setWipLimit(c, parseInt(limit) || -1);
+              }}>
+                WIP
               </button>
               <button class="mini" onclick={() => removeColumn(c)}>hapus</button>
             </div>
@@ -487,38 +559,64 @@
               {#each c.cards as t (t.id)}
                 {@const status = dueStatus(t.dueDate)}
                 <li class="card-item" animate:flip={{ duration: FLIP_MS }}>
-                  <!-- div role=button, BUKAN <button>: HTMLButtonElement.value membuat drag ditolak library -->
                   <div
                     class="card"
                     class:due-overdue={status === "overdue"}
                     class:due-soon={status === "soon"}
+                    class:blocked={t.isBlocked === 1}
                     role="button"
                     tabindex="0"
                     onclick={() => (selected = t)}
                     onkeydown={(e) => e.key === "Enter" && (selected = t)}
                   >
-                    <span class="title">{t.title}</span>
+                    <span class="title">
+                      {#if t.isBlocked === 1}<span class="blocked-tag">🚫</span>{/if}
+                      {t.title}
+                    </span>
+                    {#if t.blockedReason}
+                      <span class="blocked-reason">{t.blockedReason}</span>
+                    {/if}
                     <span class="meta">
                       {#if t.dueDate}<span class="due {status ? `due-${status}` : ''}">📅 {t.dueDate}</span>{/if}
                       {#if t.priority !== 'none'}<span class="prio prio-{t.priority}">{t.priority}</span>{/if}
                     </span>
                   </div>
                   {#if c.isDone !== 1}
-                    <button
-                      class="quick-complete"
-                      title="Selesai"
-                      disabled={completing.has(t.id)}
-                      onclick={(e) => { e.stopPropagation(); quickComplete(t); }}
-                    >
-                      {completing.has(t.id) ? "…" : "✓"}
-                    </button>
+                    <div class="card-actions">
+                      <button
+                        class="quick-complete"
+                        title="Selesai"
+                        disabled={completing.has(t.id)}
+                        onclick={(e) => { e.stopPropagation(); quickComplete(t); }}
+                      >
+                        {completing.has(t.id) ? "…" : "✓"}
+                      </button>
+                      <button
+                        class="block-toggle"
+                        title={t.isBlocked ? "Unblock" : "Block"}
+                        onclick={(e) => { e.stopPropagation(); toggleTaskBlocked(t); }}
+                      >
+                        {t.isBlocked ? "🔓" : "🚫"}
+                      </button>
+                    </div>
                   {/if}
                 </li>
               {/each}
             </ul>
 
+            {#if isWipExceeded(c)}
+              <div class="wip-warning">
+                ⚠️ WIP limit exceeded! Complete tasks before adding new ones.
+              </div>
+            {/if}
+
             <form class="add" onsubmit={(e) => { e.preventDefault(); addCard(c); }}>
-              <input placeholder="+ tugas" bind:value={drafts[c.id]} maxlength={140} />
+              <input
+                placeholder={isWipFull(c) ? "WIP limit reached" : "+ tugas"}
+                bind:value={drafts[c.id]}
+                maxlength={140}
+                disabled={isWipFull(c)}
+              />
             </form>
           </li>
         {/each}
@@ -600,7 +698,6 @@
             <input type="number" bind:value={recurringForm.dayOfMonth} min={1} max={31} />
           </label>
         {/if}
-
         <div class="form-row">
           <label>
             <span>Prioritas</span>
@@ -611,51 +708,31 @@
               <option value="high">Tinggi</option>
             </select>
           </label>
+          <label>
+            <span>Catatan</span>
+            <input bind:value={recurringForm.notes} maxlength={200} placeholder="Opsional" />
+          </label>
         </div>
-
-        <label>
-          <span>Catatan</span>
-          <textarea bind:value={recurringForm.notes} rows={2} placeholder="Catatan tambahan…"></textarea>
-        </label>
-
-        <button type="submit" class="save-recurring" disabled={recurringBusy || !recurringForm.title.trim()}>
-          {recurringBusy ? "Menyimpan…" : (editingRecurring ? "Simpan Perubahan" : "Buat Task Berulang")}
-        </button>
+        <div class="recurring-form-actions">
+          <button type="submit" disabled={recurringBusy}>
+            {recurringBusy ? "Menyimpan…" : editingRecurring ? "Update" : "Buat"}
+          </button>
+        </div>
       </form>
-    {/if}
-
-    {#if recurringLoaded && recurring.length === 0 && !showRecurringForm}
-      <p class="recurring-empty">Belum ada task berulang. Klik "+ Baru" untuk membuat.</p>
-    {:else if recurring.length > 0}
+    {:else}
       <ul class="recurring-list">
-        {#each recurring as r (r.id)}
+        {#each recurring as r}
           <li class="recurring-item">
-            <button
-              class="recurring-toggle"
-              class:inactive={r.active === 0}
-              onclick={() => toggleRecurringActive(r)}
-              title={r.active === 1 ? "Nonaktifkan" : "Aktifkan"}
-            >
-              {r.active === 1 ? "✓" : "○"}
-            </button>
             <div class="recurring-info">
-              <strong class="recurring-title">{r.title}</strong>
-              <span class="recurring-freq">
-                {#if r.freqType === "daily"}
-                  Setiap {r.freqInterval > 1 ? `${r.freqInterval} hari` : "hari"}
-                {:else if r.freqType === "weekly"}
-                  Setiap hari {["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"][r.dayOfWeek ?? 0]}
-                {:else if r.freqType === "monthly"}
-                  Setiap tanggal {r.dayOfMonth}
-                {/if}
-              </span>
+              <span class="recurring-title">{r.title}</span>
+              <span class="recurring-meta">{r.freqType} · {r.priority}</span>
             </div>
             <div class="recurring-item-actions">
-              {#if r.priority !== "none"}
-                <span class="prio prio-{r.priority}">{r.priority}</span>
-              {/if}
-              <button class="edit-recurring" onclick={() => editRecurring(r)}>Edit</button>
-              <button class="delete-recurring" onclick={() => deleteRecurring(r)}>Hapus</button>
+              <button class="mini" onclick={() => toggleRecurringActive(r)}>
+                {r.active ? "⏸" : "▶"}
+              </button>
+              <button class="mini" onclick={() => editRecurring(r)}>✏️</button>
+              <button class="mini" onclick={() => deleteRecurring(r)}>🗑</button>
             </div>
           </li>
         {/each}
@@ -663,573 +740,3 @@
     {/if}
   </div>
 {/if}
-
-{#if selected}
-  <CardDetail
-    task={selected}
-    onClose={() => (selected = null)}
-    onSave={saveCard}
-    onDelete={deleteCard}
-  />
-{/if}
-
-<style>
-  .board-page {
-    min-height: 100vh;
-    background: var(--bg, #fafafa);
-    color: #171717;
-  }
-  header {
-    display: flex;
-    align-items: baseline;
-    gap: 1rem;
-    padding: 1.25rem 1.5rem 0.5rem;
-    flex-wrap: wrap;
-  }
-  .back {
-    color: #525252;
-    text-decoration: none;
-    font-size: 0.9rem;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-  }
-  .back:hover {
-    color: #171717;
-  }
-  h1 {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin: 0;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-  }
-  .controls {
-    display: flex;
-    gap: 0.5rem;
-    margin-left: auto;
-    flex-wrap: wrap;
-  }
-  .controls label {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.85rem;
-    color: #525252;
-    font-weight: 500;
-  }
-  .controls select {
-    padding: 0.35rem 1.7rem 0.35rem 0.5rem;
-    border: 1px solid #d4d4d4;
-    border-radius: 6px;
-    font: inherit;
-    font-size: 0.85rem;
-    background-color: #fff;
-  }
-  .controls select:focus {
-    outline: 2px solid #6366f1;
-    outline-offset: -1px;
-  }
-  .recurring-btn {
-    margin-left: 0.6rem;
-    padding: 0.35rem 0.65rem;
-    border: 1px solid #d4d4d4;
-    border-radius: 6px;
-    background: #fff;
-    font: inherit;
-    font-size: 0.85rem;
-    cursor: pointer;
-    color: #525252;
-    white-space: nowrap;
-  }
-  .recurring-btn:hover {
-    background: #f5f5f5;
-  }
-  .recurring-btn.active {
-    background: #eef2ff;
-    border-color: #6366f1;
-    color: #4f46e5;
-  }
-  a.recurring-btn {
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-  }
-  .err {
-    color: #dc2626;
-    font-size: 0.85rem;
-    padding: 0 1.5rem;
-  }
-  .board-wrap {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem 2rem;
-  }
-  .board {
-    display: flex;
-    align-items: stretch;
-    gap: 0.75rem;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-    flex: 1;
-    min-height: 70vh;
-  }
-  .col {
-    flex: 0 0 17rem;
-    min-height: 15rem;
-    background: #f0f0f0;
-    border: 1px solid #e5e5e5;
-    border-radius: 10px;
-    padding: 0.65rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    max-height: calc(100vh - 9rem);
-    list-style: none;
-  }
-  .col-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .col-head .colname {
-    font-size: 0.92rem;
-    font-weight: 600;
-    margin: 0;
-    cursor: text;
-    border: none;
-    background: none;
-    padding: 0;
-    color: #171717;
-    font-family: inherit;
-  }
-  .count {
-    font-size: 0.75rem;
-    color: #525252;
-    background: #fff;
-    border-radius: 999px;
-    padding: 0.05rem 0.5rem;
-  }
-  .col-actions {
-    display: flex;
-    gap: 0.4rem;
-  }
-  button.mini {
-    border: none;
-    background: none;
-    color: #525252;
-    font-size: 0.72rem;
-    cursor: pointer;
-    padding: 0.1rem 0.3rem;
-    border-radius: 4px;
-    min-height: 44px;
-    min-width: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  button.mini:hover {
-    background: #e5e5e5;
-    color: #525252;
-  }
-  .rename {
-    font: inherit;
-    font-size: 0.92rem;
-    font-weight: 600;
-    border: 1px solid #d4d4d4;
-    border-radius: 6px;
-    padding: 0.2rem 0.4rem;
-    width: 100%;
-  }
-  ul.cards {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    min-height: 2.5rem;
-    flex: 1;
-    overflow-y: auto;
-  }
-  .card-item {
-    list-style: none;
-    display: flex;
-    align-items: stretch;
-    gap: 0.35rem;
-  }
-  .card {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-    width: 100%;
-    text-align: left;
-    background: #fff;
-    border: 1px solid #e5e5e5;
-    border-radius: 8px;
-    padding: 0.55rem 0.7rem;
-    font: inherit;
-    cursor: pointer;
-    min-height: 44px;
-  }
-  .card:hover {
-    border-color: #d4d4d4;
-  }
-  .card.due-overdue {
-    border-left: 3px solid #ef4444;
-    background: #fef2f2;
-  }
-  .card.due-soon {
-    border-left: 3px solid #f59e0b;
-    background: #fffbeb;
-  }
-  .card-item {
-    list-style: none;
-    display: flex;
-    align-items: stretch;
-    gap: 0.35rem;
-  }
-  .quick-complete {
-    flex: none;
-    width: 2rem;
-    align-self: stretch;
-    border: 1px solid #d4d4d4;
-    border-radius: 6px;
-    background: #fff;
-    font-size: 0.9rem;
-    color: #6b7280;
-    cursor: pointer;
-    padding: 0;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-  }
-  .quick-complete:hover {
-    background: #ecfdf5;
-    border-color: #10b981;
-    color: #059669;
-  }
-  .quick-complete:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  .title {
-    font-size: 0.88rem;
-    color: #171717;
-  }
-  .meta {
-    display: flex;
-    gap: 0.4rem;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .due {
-    font-size: 0.72rem;
-    color: #737373;
-  }
-  .due-overdue {
-    color: #dc2626;
-    font-weight: 600;
-  }
-  .due-soon {
-    color: #d97706;
-    font-weight: 600;
-  }
-  .prio {
-    font-size: 0.68rem;
-    padding: 0.05rem 0.45rem;
-    border-radius: 999px;
-    color: #fff;
-  }
-  .prio-low { background: #6b7280; }
-  .prio-med { background: #d97706; }
-  .prio-high { background: #dc2626; }
-  form.add input {
-    width: 100%;
-    border: 1px dashed #d4d4d4;
-    border-radius: 8px;
-    background: transparent;
-    padding: 0.45rem 0.6rem;
-    font: inherit;
-    font-size: 0.85rem;
-    color: #737373;
-    min-height: 44px;
-  }
-  form.add input:focus,
-  form.addcol input:focus {
-    outline: none;
-    border-style: solid;
-    border-color: #6366f1;
-    background: #fff;
-    color: #171717;
-  }
-  form.addcol {
-    flex: 0 0 12rem;
-    padding-top: 0.65rem;
-  }
-  form.addcol input {
-    width: 100%;
-    border: 1px dashed #d4d4d4;
-    border-radius: 10px;
-    background: transparent;
-    padding: 0.55rem 0.7rem;
-    font: inherit;
-    font-size: 0.85rem;
-    color: #737373;
-    min-height: 44px;
-  }
-  .loading {
-    color: #737373;
-    padding: 2rem 1.5rem;
-  }
-
-  /* Mobile: vertical stack, full-width columns */
-  @media (max-width: 768px) {
-    header {
-      padding: 0.75rem 1rem 0.25rem;
-      gap: 0.5rem;
-    }
-    h1 {
-      font-size: 1rem;
-    }
-    .board-wrap {
-      flex-direction: column;
-      padding: 0.5rem 1rem 1.5rem;
-      gap: 0.5rem;
-    }
-    .board {
-      flex-direction: column;
-      overflow-x: visible;
-      gap: 0.5rem;
-      min-height: auto;
-    }
-    .col {
-      flex: 1 1 auto;
-      width: 100%;
-      max-height: none;
-    }
-    .col-actions {
-      flex-wrap: wrap;
-    }
-    form.addcol {
-      flex: 1 1 auto;
-      width: 100%;
-      padding-top: 0;
-    }
-    form.addcol input {
-      min-height: 48px;
-    }
-    .card {
-      padding: 0.65rem 0.8rem;
-    }
-    .title {
-      font-size: 0.95rem;
-    }
-    .controls select {
-      font-size: 0.85rem;
-      min-height: 44px;
-    }
-    button.mini {
-      font-size: 0.85rem;
-      flex: 1;
-    }
-  }
-
-  /* Recurring panel */
-  .recurring-panel {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: min(24rem, 92vw);
-    height: 100vh;
-    background: #fff;
-    border-left: 1px solid #e5e5e5;
-    z-index: 40;
-    display: flex;
-    flex-direction: column;
-    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
-  }
-  .recurring-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid #f0f0f0;
-    flex-shrink: 0;
-  }
-  .recurring-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0;
-  }
-  .recurring-actions {
-    display: flex;
-    gap: 0.4rem;
-  }
-  .recurring-actions button {
-    padding: 0.35rem 0.6rem;
-    border: 1px solid #d4d4d4;
-    border-radius: 6px;
-    background: #fff;
-    font: inherit;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .recurring-actions button:hover {
-    background: #f5f5f5;
-  }
-  .add-recurring {
-    background: #6366f1 !important;
-    color: #fff !important;
-    border-color: #6366f1 !important;
-  }
-  .add-recurring:hover {
-    background: #4f46e5 !important;
-  }
-  .recurring-form {
-    padding: 1rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    border-bottom: 1px solid #f0f0f0;
-    overflow-y: auto;
-  }
-  .recurring-form label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.8rem;
-    color: #525252;
-  }
-  .recurring-form input,
-  .recurring-form select,
-  .recurring-form textarea {
-    padding: 0.4rem 0.55rem;
-    border: 1px solid #d4d4d4;
-    border-radius: 6px;
-    font: inherit;
-    font-size: 0.85rem;
-  }
-  .recurring-form input:focus,
-  .recurring-form select:focus,
-  .recurring-form textarea:focus {
-    outline: 2px solid #6366f1;
-    outline-offset: -1px;
-  }
-  .form-row {
-    display: flex;
-    gap: 0.75rem;
-  }
-  .form-row label {
-    flex: 1;
-  }
-  .save-recurring {
-    padding: 0.5rem;
-    border: none;
-    border-radius: 6px;
-    background: #6366f1;
-    color: #fff;
-    font: inherit;
-    font-size: 0.85rem;
-    cursor: pointer;
-  }
-  .save-recurring:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  .save-recurring:not(:disabled):hover {
-    background: #4f46e5;
-  }
-  .recurring-empty {
-    padding: 1.5rem 1.25rem;
-    color: #737373;
-    font-size: 0.85rem;
-    text-align: center;
-  }
-  .recurring-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    flex: 1;
-    overflow-y: auto;
-  }
-  .recurring-item {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.75rem 1.25rem;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  .recurring-toggle {
-    width: 1.5rem;
-    height: 1.5rem;
-    border: 1px solid #d4d4d4;
-    border-radius: 4px;
-    background: #fff;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    color: #10b981;
-    flex-shrink: 0;
-  }
-  .recurring-toggle.inactive {
-    color: #a3a3a3;
-  }
-  .recurring-toggle:hover {
-    border-color: #10b981;
-  }
-  .recurring-toggle.inactive:hover {
-    border-color: #a3a3a3;
-  }
-  .recurring-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-  .recurring-title {
-    font-size: 0.88rem;
-    font-weight: 500;
-  }
-  .recurring-freq {
-    font-size: 0.75rem;
-    color: #737373;
-  }
-  .recurring-item-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-shrink: 0;
-  }
-  .recurring-item-actions button {
-    padding: 0.25rem 0.5rem;
-    border: 1px solid #d4d4d4;
-    border-radius: 4px;
-    background: #fff;
-    font-size: 0.75rem;
-    cursor: pointer;
-  }
-  .recurring-item-actions button:hover {
-    background: #f5f5f5;
-  }
-  .delete-recurring:hover {
-    color: #dc2626;
-    border-color: #dc2626;
-  }
-  .prio {
-    font-size: 0.68rem;
-    padding: 0.05rem 0.45rem;
-    border-radius: 999px;
-    color: #fff;
-  }
-  .prio-low { background: #6b7280; }
-  .prio-med { background: #d97706; }
-  .prio-high { background: #dc2626; }
-</style>

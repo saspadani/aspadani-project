@@ -14,6 +14,8 @@ export type Column = {
   name: string;
   sort: number;
   isDone: number;
+  isBlocked: number;
+  wipLimit: number;
 };
 
 /** Representasi ringan kolom untuk quick-add di dashboard. */
@@ -43,6 +45,8 @@ export type Task = {
   notes: string;
   priority: "none" | "low" | "med" | "high";
   dueDate: string | null;
+  isBlocked: number;
+  blockedReason: string | null;
   sort: number;
 };
 

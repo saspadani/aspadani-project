@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, asc, and } from "drizzle-orm";
+import { eq, asc, and, sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { db } from "../db";
 import { projects, columns, tasks } from "../db/schema";
@@ -33,7 +33,11 @@ boardRoutes.get("/projects/:id/board", async (c) => {
 /** Tambah kolom di posisi terakhir. */
 boardRoutes.post("/projects/:id/columns", async (c) => {
   const projectId = c.req.param("id");
-  const body = await c.req.json<{ name?: string }>().catch(() => ({}) as { name?: string });
+  const body = await c.req.json<{
+    name?: string;
+    isBlocked?: boolean;
+    wipLimit?: number;
+  }>().catch(() => ({}) as { name?: string; isBlocked?: boolean; wipLimit?: number });
   const name = body.name?.trim();
   if (!name) return c.json({ error: "nama wajib diisi" }, 400);
 
@@ -52,18 +56,32 @@ boardRoutes.post("/projects/:id/columns", async (c) => {
   const maxSort = existing.length > 0 ? existing[existing.length - 1].sort : -1;
 
   const id = crypto.randomUUID();
-  await db(c.env).insert(columns).values({ id, projectId, name, sort: maxSort + 1 });
+  await db(c.env).insert(columns).values({
+    id,
+    projectId,
+    name,
+    sort: maxSort + 1,
+    isBlocked: body.isBlocked ? 1 : 0,
+    wipLimit: body.wipLimit ?? -1,
+  });
   const [col] = await db(c.env).select().from(columns).where(eq(columns.id, id)).limit(1);
   return c.json({ column: col }, 201);
 });
 
 boardRoutes.patch("/columns/:id", async (c) => {
   const id = c.req.param("id");
-  type ColPatch = { name?: string; isDone?: boolean };
+  type ColPatch = {
+    name?: string;
+    isDone?: boolean;
+    isBlocked?: boolean;
+    wipLimit?: number;
+  };
   const body = await c.req.json<ColPatch>().catch(() => ({}) as ColPatch);
   const patch: Record<string, unknown> = {};
   if (body.name?.trim()) patch.name = body.name.trim();
   if (typeof body.isDone === "boolean") patch.isDone = body.isDone ? 1 : 0;
+  if (typeof body.isBlocked === "boolean") patch.isBlocked = body.isBlocked ? 1 : 0;
+  if (typeof body.wipLimit === "number") patch.wipLimit = body.wipLimit;
   if (Object.keys(patch).length === 0) return c.json({ error: "tidak ada perubahan" }, 400);
 
   const result = await db(c.env).update(columns).set(patch).where(eq(columns.id, id)).returning();
@@ -107,8 +125,21 @@ boardRoutes.patch("/board/:projectId/order", async (c) => {
   if (statements.length === 0) return c.json({ error: "kosong" }, 400);
 
   const d = db(c.env);
-  // Elemen statements memang update-builder dari tabel yang sama; inferensi TS
-  // drizzle tidak menariknya ke tipe tuple batch, jadi lewat unknown.
   await d.batch(statements as unknown as Parameters<typeof d.batch>[0]);
   return c.json({ ok: true });
+});
+
+/** PATCH task: update blocked status */
+boardRoutes.patch("/tasks/:id/block", async (c) => {
+  const id = c.req.param("id");
+  type BlockBody = { isBlocked?: boolean; blockedReason?: string };
+  const body = await c.req.json<BlockBody>().catch(() => ({}) as BlockBody);
+  const patch: Record<string, unknown> = {};
+  if (typeof body.isBlocked === "boolean") patch.isBlocked = body.isBlocked ? 1 : 0;
+  if (body.blockedReason !== undefined) patch.blockedReason = body.blockedReason;
+  if (Object.keys(patch).length === 0) return c.json({ error: "tidak ada perubahan" }, 400);
+
+  const result = await db(c.env).update(tasks).set(patch).where(eq(tasks.id, id)).returning();
+  if (result.length === 0) return c.json({ error: "tidak ditemukan" }, 404);
+  return c.json({ task: result[0] });
 });
