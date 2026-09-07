@@ -407,7 +407,7 @@
 
     // Check WIP limit before adding
     if (isWipFull(c)) {
-      error = `WIP limit reached! Complete current tasks before adding new ones.`;
+      error = `Batas WIP tercapai! Selesaikan tugas yang ada sebelum menambah baru.`;
       return;
     }
 
@@ -624,7 +624,7 @@
                   WIP Limit… <span class="menu-value">{c.wipLimit >= 0 ? c.wipLimit : "∞"}</span>
                 </button>
                 <button role="menuitem" onclick={() => { menuCol = null; roleEditCol = c.id; }}>
-                  Role… <span class="menu-value">{ROLE_LABEL[c.role ?? ""] ?? "—"}</span>
+                  Peran… <span class="menu-value">{ROLE_LABEL[c.role ?? ""] ?? "—"}</span>
                 </button>
                 <hr />
                 <button role="menuitem" class="danger" onclick={() => { menuCol = null; removeColumn(c); }}>
@@ -739,13 +739,13 @@
 
             {#if isWipExceeded(c)}
               <div class="wip-warning">
-                ⚠️ WIP limit exceeded! Complete tasks before adding new ones.
+                ⚠️ Batas WIP terlampaui! Selesaikan tugas sebelum menambah baru.
               </div>
             {/if}
 
             <form class="add" onsubmit={(e) => { e.preventDefault(); addCard(c); }}>
               <input
-                placeholder={isWipFull(c) ? "WIP limit reached" : "+ tugas"}
+                placeholder={isWipFull(c) ? "Batas WIP tercapai" : "+ tugas"}
                 bind:value={drafts[c.id]}
                 maxlength={140}
                 disabled={isWipFull(c)}
