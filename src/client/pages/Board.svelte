@@ -410,15 +410,41 @@
   }
 
   async function toggleTaskBlocked(t: Task) {
-    const newBlocked = t.isBlocked === 1 ? 0 : 1;
+    const unblock = t.isBlocked === 1;
+    if (unblock) {
+      try {
+        await api(`/api/tasks/${t.id}/block`, {
+          method: "PATCH",
+          body: JSON.stringify({ isBlocked: false, blockedReason: null }),
+        });
+        cols = cols.map((c) => ({
+          ...c,
+          cards: c.cards.map((x) =>
+            x.id === t.id ? { ...x, isBlocked: 0, blockedReason: null } : x,
+          ),
+        }));
+      } catch {
+        error = "Gagal update blocked status";
+      }
+      return;
+    }
+    const reason = prompt(
+      'Alasan task ini diblokir? (mis. "menunggu balasan Pak X")',
+      t.blockedReason ?? "",
+    );
+    if (reason === null) return; // dibatalkan — jangan ubah status
     try {
-      await api(`/api/tasks/${t.id}/block`, {
+      const { task } = await api<{ task: Task }>(`/api/tasks/${t.id}/block`, {
         method: "PATCH",
-        body: JSON.stringify({ isBlocked: newBlocked === 1 }),
+        body: JSON.stringify({ isBlocked: true, blockedReason: reason.trim() || null }),
       });
       cols = cols.map((c) => ({
         ...c,
-        cards: c.cards.map((x) => (x.id === t.id ? { ...x, isBlocked: newBlocked } : x)),
+        cards: c.cards.map((x) =>
+          x.id === t.id
+            ? { ...x, isBlocked: task.isBlocked ?? 1, blockedReason: task.blockedReason ?? null }
+            : x,
+        ),
       }));
     } catch {
       error = "Gagal update blocked status";
