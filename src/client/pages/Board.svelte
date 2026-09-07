@@ -741,6 +741,15 @@
   </div>
 {/if}
 
+{#if selected}
+  <CardDetail
+    task={selected}
+    onClose={() => (selected = null)}
+    onSave={saveCard}
+    onDelete={deleteCard}
+  />
+{/if}
+
 <style>
   .board-page {
     min-height: 100vh;
