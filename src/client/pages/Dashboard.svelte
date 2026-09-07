@@ -111,8 +111,11 @@
 
     if (e.key === "n" || e.key === "N") {
       e.preventDefault();
-      const el = document.querySelector(".new input") as HTMLInputElement;
-      el?.focus();
+      showNewProject = true;
+      setTimeout(() => {
+        const el = document.querySelector(".new input") as HTMLInputElement;
+        el?.focus();
+      }, 50);
     }
   }
 
@@ -134,6 +137,7 @@
       });
       projects = [...projects, { ...project, activeTaskCount: 0 }];
       newName = "";
+      showNewProject = false;
       open(project);
     } catch (err) {
       error = String(err instanceof Error ? err.message : err);
@@ -241,6 +245,7 @@
   }
 
   // ---- Fokus Hari Ini -------------------------------------------------------
+  let showNewProject = $state(false);
   let focus = $state<{ blocked: FocusItem[]; doing: FocusItem[]; soon: FocusItem[] } | null>(null);
   let focusTask = $state<Task | null>(null);
 
@@ -342,15 +347,6 @@
     </div>
   {/if}
 
-  <form class="new" onsubmit={create}>
-    <input
-      placeholder="Nama proyek baru…"
-      bind:value={newName}
-      maxlength={80}
-      disabled={busy}
-    />
-    <button type="submit" disabled={busy || !newName.trim()} aria-label="Tambah proyek">＋</button>
-  </form>
   {#if error}<p class="err">{error}</p>{/if}
 
   {#if focus}
@@ -431,9 +427,31 @@
   {/if}
 
   {#if projects.length === 0}
-    <p class="empty">Belum ada proyek. Mulai dengan mengetik nama di atas.</p>
+    <p class="empty">Belum ada proyek. Buat lewat form di bawah.</p>
   {:else}
-    <ul>
+    <form class="new" onsubmit={create}>
+      {#if showNewProject}
+        <input
+          placeholder="Nama proyek baru…"
+          bind:value={newName}
+          maxlength={80}
+          disabled={busy}
+          autofocus
+        />
+        <button type="submit" disabled={busy || !newName.trim()} aria-label="Tambah proyek">＋</button>
+      {:else}
+        <button
+          type="button"
+          class="new-toggle"
+          onclick={() => (showNewProject = true)}
+          aria-label="Tambah proyek"
+        >
+          ＋ Proyek baru
+        </button>
+      {/if}
+    </form>
+  {/if}
+  <ul>
       {#each projects as p (p.id)}
         <li style="--accent: {p.color}">
           <button class="row" onclick={() => open(p)}>
@@ -475,7 +493,6 @@
         {/if}
       {/each}
     </ul>
-  {/if}
 
   <!-- Section Arsip (collapsible) -->
   <section class="archive">
@@ -977,7 +994,32 @@
   }
   .focus-open {
     flex: none;
-    width: 2rem;
+    width: 44px;
+  }
+  .new-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    border: 1px dashed #d4d4d4;
+    border-radius: 10px;
+    background: transparent;
+    font: inherit;
+    font-size: 0.85rem;
+    color: #737373;
+    padding: 0.55rem 0.7rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .new-toggle:hover {
+    border-color: #6366f1;
+    color: #4f46e5;
+    background: #fff;
+  }
+  form.new input {
+    flex: 1;
+    min-width: 0;
   }
   .focus-empty {
     font-size: 0.82rem;
