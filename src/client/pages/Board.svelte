@@ -350,6 +350,38 @@
     }
   }
 
+  const ROLE_LABEL: Record<string, string> = {
+    backlog: "📥 backlog",
+    doing: "🔧 doing",
+    waiting: "⏳ waiting",
+    done: "✅ done",
+  };
+
+  /** Tetapkan peran kolom (dipakai daftar Fokus di halaman depan). */
+  async function setRole(c: ColVM) {
+    const current = c.role ?? "";
+    const input = prompt(
+      `Peran kolom "${c.name}":\n  backlog  = antrean\n  doing    = sedang dikerjakan\n  waiting  = menunggu pihak lain\n  done     = selesai\n  (kosongkan untuk menghapus peran)`,
+      current,
+    );
+    if (input === null) return;
+    const role = input.trim().toLowerCase();
+    if (role && !["backlog", "doing", "waiting", "done"].includes(role)) {
+      error = "Peran tidak valid. Gunakan: backlog, doing, waiting, done.";
+      return;
+    }
+    try {
+      await api(`/api/columns/${c.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: role || null }),
+      });
+      cols = cols.map((x) => (x.id === c.id ? { ...x, role: (role || null) as ColVM["role"] } : x));
+      error = "";
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err);
+    }
+  }
+
   async function setWipLimit(c: ColVM, limit: number) {
     try {
       await api(`/api/columns/${c.id}`, {
@@ -568,6 +600,9 @@
                 if (limit !== null) setWipLimit(c, parseInt(limit) || -1);
               }}>
                 WIP
+              </button>
+              <button class="mini" onclick={() => setRole(c)} title="Peran kolom untuk daftar Fokus">
+                {ROLE_LABEL[c.role ?? ""] ?? "Role"}
               </button>
               <button class="mini" onclick={() => removeColumn(c)}>hapus</button>
             </div>

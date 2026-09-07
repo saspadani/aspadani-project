@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../lib/api";
-  import type { Project, ColumnOption, SearchResult } from "../lib/types";
+  import type { Project, ColumnOption, SearchResult, FocusItem, Task } from "../lib/types";
+  import CardDetail from "./CardDetail.svelte";
 
   let projects = $state<Project[]>([]);
   let newName = $state("");
@@ -238,6 +239,53 @@
     await api(`/api/projects/${p.id}`, { method: "DELETE" });
     projects = projects.filter((x) => x.id !== p.id);
   }
+
+  // ---- Fokus Hari Ini -------------------------------------------------------
+  let focus = $state<{ blocked: FocusItem[]; doing: FocusItem[]; soon: FocusItem[] } | null>(null);
+  let focusTask = $state<Task | null>(null);
+
+  async function loadFocus() {
+    try {
+      focus = await api<{ blocked: FocusItem[]; doing: FocusItem[]; soon: FocusItem[] }>("/api/focus");
+    } catch {
+      focus = null;
+    }
+  }
+  loadFocus();
+
+  /** Umur blokir dalam hari (dari blockedSince), untuk label "terhambat N hari". */
+  function blockedAge(since: string | null): string {
+    if (!since) return "";
+    const days = Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24));
+    if (days <= 0) return "hari ini";
+    if (days === 1) return "1 hari";
+    return `${days} hari`;
+  }
+
+  /** Buka modal detail task fokus lintas proyek. */
+  async function openFocusItem(item: FocusItem) {
+    try {
+      const { task } = await api<{ task: Task }>(`/api/tasks/${item.id}`);
+      focusTask = { ...task, projectId: item.projectId };
+    } catch {
+      error = "Gagal membuka task";
+    }
+  }
+
+  function onFocusSaved(updated: Task) {
+    // refetch fokus agar kelompok & isi terbaru
+    loadFocus();
+    focusTask = null;
+    void updated;
+  }
+
+  function focusGoBoard(item: FocusItem) {
+    location.hash = `#/p/${item.projectId}`;
+  }
+
+  const focusEmpty = $derived(
+    focus && focus.blocked.length === 0 && focus.doing.length === 0 && focus.soon.length === 0,
+  );
 </script>
 
 <main class="wrap">
@@ -304,6 +352,83 @@
     <button type="submit" disabled={busy || !newName.trim()} aria-label="Tambah proyek">＋</button>
   </form>
   {#if error}<p class="err">{error}</p>{/if}
+
+  {#if focus}
+    <section class="focus">
+      <h2>Fokus Hari Ini</h2>
+      {#if focusEmpty}
+        <p class="focus-empty">
+          Belum ada yang perlu difokuskan. Tetapkan peran kolom (tombol <em>Role</em> di board):
+          <strong>doing</strong> untuk pekerjaan aktif, <strong>waiting</strong> untuk yang menunggu pihak lain.
+        </p>
+      {:else}
+        {#if focus.blocked.length > 0}
+          <div class="focus-group">
+            <h3>🚫 Terhambat <span class="focus-count">{focus.blocked.length}</span></h3>
+            <ul>
+              {#each focus.blocked as item (item.id)}
+                <li>
+                  <button class="focus-row" onclick={() => openFocusItem(item)}>
+                    <span class="focus-info">
+                      <strong>{item.title}</strong>
+                      <small>
+                        {item.projectName}
+                        {#if item.blockedReason}· {item.blockedReason}{/if}
+                        {#if item.blockedSince}· terhambat {blockedAge(item.blockedSince)}{/if}
+                      </small>
+                    </span>
+                    {#if item.dueDate}<span class="due due-{dueStatus(item.dueDate)}">📅 {item.dueDate}</span>{/if}
+                    {#if item.priority !== 'none'}<span class="prio prio-{item.priority}">{item.priority}</span>{/if}
+                  </button>
+                  <button class="ghost focus-open" onclick={() => focusGoBoard(item)} title="Buka board">↗</button>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+        {#if focus.doing.length > 0}
+          <div class="focus-group">
+            <h3>🔧 Sedang Dikerjakan <span class="focus-count">{focus.doing.length}</span></h3>
+            <ul>
+              {#each focus.doing as item (item.id)}
+                <li>
+                  <button class="focus-row" onclick={() => openFocusItem(item)}>
+                    <span class="focus-info">
+                      <strong>{item.title}</strong>
+                      <small>{item.projectName}</small>
+                    </span>
+                    {#if item.dueDate}<span class="due due-{dueStatus(item.dueDate)}">📅 {item.dueDate}</span>{/if}
+                    {#if item.priority !== 'none'}<span class="prio prio-{item.priority}">{item.priority}</span>{/if}
+                  </button>
+                  <button class="ghost focus-open" onclick={() => focusGoBoard(item)} title="Buka board">↗</button>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+        {#if focus.soon.length > 0}
+          <div class="focus-group">
+            <h3>📅 Mendatang (≤ 7 hari) <span class="focus-count">{focus.soon.length}</span></h3>
+            <ul>
+              {#each focus.soon as item (item.id)}
+                <li>
+                  <button class="focus-row" onclick={() => openFocusItem(item)}>
+                    <span class="focus-info">
+                      <strong>{item.title}</strong>
+                      <small>{item.projectName}</small>
+                    </span>
+                    <span class="due due-{dueStatus(item.dueDate)}">📅 {item.dueDate}</span>
+                    {#if item.priority !== 'none'}<span class="prio prio-{item.priority}">{item.priority}</span>{/if}
+                  </button>
+                  <button class="ghost focus-open" onclick={() => focusGoBoard(item)} title="Buka board">↗</button>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      {/if}
+    </section>
+  {/if}
 
   {#if projects.length === 0}
     <p class="empty">Belum ada proyek. Mulai dengan mengetik nama di atas.</p>
@@ -382,6 +507,15 @@
     {/if}
   </section>
 </main>
+
+{#if focusTask}
+  <CardDetail
+    task={focusTask}
+    onClose={() => (focusTask = null)}
+    onSave={onFocusSaved}
+    onDelete={onFocusSaved}
+  />
+{/if}
 
 <style>
   .wrap {
@@ -753,5 +887,102 @@
   }
   .archive li .info small {
     font-style: italic;
+  }
+
+  /* Fokus Hari Ini */
+  .focus {
+    margin: 0 0 1.25rem;
+    padding: 0.75rem 0.9rem;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+  }
+  .focus h2 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem;
+  }
+  .focus-group {
+    margin-bottom: 0.6rem;
+  }
+  .focus-group:last-child {
+    margin-bottom: 0;
+  }
+  .focus-group h3 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #525252;
+    margin: 0 0 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .focus-count {
+    font-size: 0.7rem;
+    background: #f0f0f0;
+    border-radius: 999px;
+    padding: 0 0.4rem;
+    color: #525252;
+  }
+  .focus-group ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .focus-group li {
+    display: flex;
+    align-items: stretch;
+    gap: 0.3rem;
+  }
+  .focus-row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: none;
+    background: none;
+    font: inherit;
+    text-align: left;
+    padding: 0.4rem 0.45rem;
+    border-radius: 8px;
+    cursor: pointer;
+    min-height: 44px;
+  }
+  .focus-row:hover {
+    background: #f5f5f5;
+  }
+  .focus-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    min-width: 0;
+  }
+  .focus-info strong {
+    font-size: 0.88rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .focus-info small {
+    font-size: 0.72rem;
+    color: #737373;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .focus-open {
+    flex: none;
+    width: 2rem;
+  }
+  .focus-empty {
+    font-size: 0.82rem;
+    color: #737373;
+    margin: 0;
+    line-height: 1.5;
   }
 </style>

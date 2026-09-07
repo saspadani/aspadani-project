@@ -23,6 +23,8 @@ export const columns = sqliteTable(
     isDone: integer("is_done").notNull().default(0),
     isBlocked: integer("is_blocked").notNull().default(0),
     wipLimit: integer("wip_limit").notNull().default(-1),
+    /** Peran eksplisit: backlog | doing | waiting | done. NULL = belum ditetapkan. */
+    role: text("role"),
   },
   (t) => [index("idx_columns_project").on(t.projectId, t.sort)],
 );
@@ -43,6 +45,8 @@ export const tasks = sqliteTable(
     dueDate: text("due_date"),
     isBlocked: integer("is_blocked").notNull().default(0),
     blockedReason: text("blocked_reason"),
+    /** ISO saat task mulai diblokir; NULL saat tidak blocked. Untuk aging. */
+    blockedSince: text("blocked_since"),
     sort: integer("sort").notNull().default(0),
     createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),

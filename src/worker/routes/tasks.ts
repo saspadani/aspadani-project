@@ -44,6 +44,14 @@ taskRoutes.post("/projects/:projectId/tasks", async (c) => {
   return c.json({ task }, 201);
 });
 
+/** Ambil satu task berdasarkan id (dipakai daftar Fokus di dashboard). */
+taskRoutes.get("/tasks/:id", async (c) => {
+  const id = c.req.param("id");
+  const [task] = await db(c.env).select().from(tasks).where(eq(tasks.id, id)).limit(1);
+  if (!task) return c.json({ error: "tidak ditemukan" }, 404);
+  return c.json({ task });
+});
+
 taskRoutes.patch("/tasks/:id", async (c) => {
   const id = c.req.param("id");
   type TaskPatch = {

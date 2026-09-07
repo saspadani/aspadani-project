@@ -16,6 +16,7 @@ export type Column = {
   isDone: number;
   isBlocked: number;
   wipLimit: number;
+  role?: "backlog" | "doing" | "waiting" | "done" | null;
 };
 
 /** Representasi ringan kolom untuk quick-add di dashboard. */
@@ -47,7 +48,20 @@ export type Task = {
   dueDate: string | null;
   isBlocked: number;
   blockedReason: string | null;
+  blockedSince?: string | null;
   sort: number;
+};
+
+/** Item daftar "Fokus Hari Ini" (lintas proyek). */
+export type FocusItem = {
+  id: string;
+  title: string;
+  priority: "none" | "low" | "med" | "high";
+  dueDate: string | null;
+  blockedReason: string | null;
+  blockedSince: string | null;
+  projectId: string;
+  projectName: string;
 };
 
 export type Subtask = {
