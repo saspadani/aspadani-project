@@ -357,25 +357,31 @@
     done: "✅ done",
   };
 
-  /** Tetapkan peran kolom (dipakai daftar Fokus di halaman depan). */
-  async function setRole(c: ColVM) {
-    const current = c.role ?? "";
-    const input = prompt(
-      `Peran kolom "${c.name}":\n  backlog  = antrean\n  doing    = sedang dikerjakan\n  waiting  = menunggu pihak lain\n  done     = selesai\n  (kosongkan untuk menghapus peran)`,
-      current,
-    );
-    if (input === null) return;
-    const role = input.trim().toLowerCase();
-    if (role && !["backlog", "doing", "waiting", "done"].includes(role)) {
-      error = "Peran tidak valid. Gunakan: backlog, doing, waiting, done.";
-      return;
-    }
+  // ---- menu & popover kolom ---------------------------------------------------
+  let menuCol = $state<string | null>(null);
+  let wipEditCol = $state<string | null>(null);
+  let wipEditValue = $state(0);
+  let roleEditCol = $state<string | null>(null);
+
+  function startWipEdit(c: ColVM) {
+    wipEditValue = c.wipLimit;
+    wipEditCol = c.id;
+  }
+
+  async function commitWipEdit(c: ColVM) {
+    const limit = Number.isFinite(wipEditValue) ? Math.trunc(wipEditValue) : -1;
+    await setWipLimit(c, limit);
+    wipEditCol = null;
+  }
+
+  async function applyRole(c: ColVM, role: "backlog" | "doing" | "waiting" | "done" | null) {
     try {
       await api(`/api/columns/${c.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ role: role || null }),
+        body: JSON.stringify({ role }),
       });
-      cols = cols.map((x) => (x.id === c.id ? { ...x, role: (role || null) as ColVM["role"] } : x));
+      cols = cols.map((x) => (x.id === c.id ? { ...x, role } : x));
+      roleEditCol = null;
       error = "";
     } catch (err) {
       error = String(err instanceof Error ? err.message : err);
@@ -489,6 +495,9 @@
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
     if (e.key === "Escape") {
+      if (menuCol !== null) { menuCol = null; return; }
+      if (wipEditCol !== null) { wipEditCol = null; return; }
+      if (roleEditCol !== null) { roleEditCol = null; return; }
       selected = null;
       renaming = null;
       return;
@@ -589,23 +598,86 @@
               </span>
             </div>
             <div class="col-actions">
-              <button class="mini" onclick={() => toggleDone(c)}>
-                {c.isDone ? "selesai ✓" : "tandai selesai"}
-              </button>
               <button class="mini" onclick={() => toggleBlocked(c)} class:active={c.isBlocked === 1}>
                 {c.isBlocked ? "🚫 Blocked" : "Block"}
               </button>
-              <button class="mini" onclick={() => {
-                const limit = prompt("WIP Limit (-1 untuk tidak ada):", String(c.wipLimit));
-                if (limit !== null) setWipLimit(c, parseInt(limit) || -1);
-              }}>
-                WIP
+              <button
+                class="mini"
+                class:active={menuCol === c.id}
+                onclick={(e) => { e.stopPropagation(); menuCol = menuCol === c.id ? null : c.id; }}
+                aria-haspopup="menu"
+                aria-expanded={menuCol === c.id}
+                title="Opsi kolom"
+              >
+                ⋯
               </button>
-              <button class="mini" onclick={() => setRole(c)} title="Peran kolom untuk daftar Fokus">
-                {ROLE_LABEL[c.role ?? ""] ?? "Role"}
-              </button>
-              <button class="mini" onclick={() => removeColumn(c)}>hapus</button>
             </div>
+
+            {#if menuCol === c.id}
+              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+              <div class="col-menu-backdrop" onclick={() => (menuCol = null)}></div>
+              <div class="col-menu" role="menu">
+                <button role="menuitem" onclick={() => { menuCol = null; toggleDone(c); }}>
+                  {c.isDone ? "↩ Tandai belum selesai" : "✓ Tandai selesai"}
+                </button>
+                <button role="menuitem" onclick={() => { menuCol = null; startWipEdit(c); }}>
+                  WIP Limit… <span class="menu-value">{c.wipLimit >= 0 ? c.wipLimit : "∞"}</span>
+                </button>
+                <button role="menuitem" onclick={() => { menuCol = null; roleEditCol = c.id; }}>
+                  Role… <span class="menu-value">{ROLE_LABEL[c.role ?? ""] ?? "—"}</span>
+                </button>
+                <hr />
+                <button role="menuitem" class="danger" onclick={() => { menuCol = null; removeColumn(c); }}>
+                  Hapus kolom
+                </button>
+              </div>
+            {/if}
+
+            {#if wipEditCol === c.id}
+              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+              <div class="col-pop">
+                <div class="col-pop-title">WIP Limit — {c.name}</div>
+                <div class="wip-stepper">
+                  <button type="button" onclick={() => (wipEditValue = wipEditValue - 1)} aria-label="Kurangi">−</button>
+                  <input
+                    type="number"
+                    bind:value={wipEditValue}
+                    min={-1}
+                    max={99}
+                    onkeydown={(e) => { if (e.key === "Enter") commitWipEdit(c); }}
+                  />
+                  <button type="button" onclick={() => (wipEditValue = wipEditValue + 1)} aria-label="Tambah">＋</button>
+                </div>
+                <p class="col-pop-hint">-1 = tanpa batas. Saran riset: <strong>doing = 1–2</strong>.</p>
+                <div class="col-pop-actions">
+                  <button class="pop-cancel" onclick={() => (wipEditCol = null)}>Batal</button>
+                  <button class="pop-save" onclick={() => commitWipEdit(c)}>Simpan</button>
+                </div>
+              </div>
+            {:else if roleEditCol === c.id}
+              <div class="col-pop">
+                <div class="col-pop-title">Peran Kolom — {c.name}</div>
+                <div class="role-choices">
+                  {#each Object.entries(ROLE_LABEL) as [value, label]}
+                    <button
+                      class="role-choice"
+                      class:selected={c.role === value}
+                      onclick={() => applyRole(c, value as "backlog" | "doing" | "waiting" | "done")}
+                    >
+                      {label}
+                    </button>
+                  {/each}
+                </div>
+                <p class="col-pop-hint">Role menentukan isi daftar <strong>Fokus Hari Ini</strong>.</p>
+                <div class="col-pop-actions">
+                  {#if c.role}
+                    <button class="pop-clear" onclick={() => applyRole(c, null)}>Hapus peran</button>
+                  {/if}
+                  <span class="spacer"></span>
+                  <button class="pop-cancel" onclick={() => (roleEditCol = null)}>Tutup</button>
+                </div>
+              </div>
+            {/if}
 
             <!-- Zona level kartu: drag lintas kolom + reorder -->
             <ul
@@ -953,6 +1025,174 @@
   .col-actions {
     display: flex;
     gap: 0.4rem;
+  }
+
+  /* Menu & popover kolom */
+  .col-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+  }
+  .col-menu {
+    position: absolute;
+    top: 2.4rem;
+    right: 0.5rem;
+    z-index: 31;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    padding: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    min-width: 12rem;
+  }
+  .col-menu button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 0.85rem;
+    color: #171717;
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+    min-height: 40px;
+  }
+  .col-menu button:hover {
+    background: #f5f5f5;
+  }
+  .col-menu button.danger {
+    color: #dc2626;
+  }
+  .col-menu button.danger:hover {
+    background: #fef2f2;
+  }
+  .col-menu hr {
+    border: none;
+    border-top: 1px solid #f0f0f0;
+    margin: 0.25rem 0;
+  }
+  .menu-value {
+    font-size: 0.75rem;
+    color: #737373;
+  }
+  .col-pop {
+    position: absolute;
+    top: 2.4rem;
+    right: 0.5rem;
+    z-index: 31;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    padding: 0.75rem;
+    width: min(15rem, calc(100vw - 2rem));
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .col-pop-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .col-pop-hint {
+    font-size: 0.72rem;
+    color: #737373;
+    margin: 0;
+    line-height: 1.4;
+  }
+  .col-pop-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .col-pop-actions .spacer {
+    flex: 1;
+  }
+  .col-pop-actions button {
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.78rem;
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+    min-height: 36px;
+  }
+  .col-pop-actions button:hover {
+    background: #f5f5f5;
+  }
+  .pop-save {
+    background: #6366f1 !important;
+    border-color: #6366f1 !important;
+    color: #fff !important;
+  }
+  .pop-save:hover {
+    background: #4f46e5 !important;
+  }
+  .pop-clear {
+    color: #dc2626;
+  }
+  .wip-stepper {
+    display: flex;
+    gap: 0.35rem;
+  }
+  .wip-stepper button {
+    width: 2.2rem;
+    min-height: 38px;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .wip-stepper button:hover {
+    background: #f5f5f5;
+  }
+  .wip-stepper input {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #d4d4d4;
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  .wip-stepper input:focus {
+    outline: 2px solid #6366f1;
+    outline-offset: -1px;
+  }
+  .role-choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+  }
+  .role-choice {
+    border: 1px solid #d4d4d4;
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 0.5rem 0.4rem;
+    cursor: pointer;
+    min-height: 40px;
+    text-align: left;
+  }
+  .role-choice:hover {
+    background: #f5f5f5;
+  }
+  .role-choice.selected {
+    border-color: #6366f1;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-weight: 600;
   }
   button.mini {
     border: none;
