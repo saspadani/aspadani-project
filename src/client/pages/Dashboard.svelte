@@ -997,7 +997,9 @@
     width: 44px;
   }
   .new-toggle {
+    flex: 1 1 100%;
     width: 100%;
+    white-space: nowrap;
     display: flex;
     align-items: center;
     justify-content: center;
