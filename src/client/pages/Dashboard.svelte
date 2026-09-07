@@ -215,6 +215,18 @@
     }
   }
 
+  /** Hitungan arsip untuk badge — fetch ringan saat mount (tanpa membuka daftar). */
+  async function loadArchiveCount() {
+    try {
+      const data = await api<{ projects: Project[] }>("/api/projects/archived");
+      archived = data.projects;
+      archiveLoaded = true;
+    } catch {
+      // biarkan badge tersembunyi bila gagal
+    }
+  }
+  loadArchiveCount();
+
   async function restore(p: Project) {
     try {
       await api(`/api/projects/${p.id}`, {
