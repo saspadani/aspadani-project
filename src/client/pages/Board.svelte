@@ -599,7 +599,7 @@
             </div>
             <div class="col-actions">
               <button class="mini" onclick={() => toggleBlocked(c)} class:active={c.isBlocked === 1}>
-                {c.isBlocked ? "🚫 Blocked" : "Block"}
+                {c.isBlocked ? "🚫 Terblokir" : "Blokir"}
               </button>
               <button
                 class="mini"
@@ -987,6 +987,7 @@
     min-height: 70vh;
   }
   .col {
+    position: relative;
     flex: 0 0 17rem;
     min-height: 15rem;
     background: #f0f0f0;
