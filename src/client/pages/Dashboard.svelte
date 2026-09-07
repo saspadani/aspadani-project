@@ -498,6 +498,9 @@
   <section class="archive">
     <button class="archive-toggle" onclick={toggleArchive} aria-expanded={showArchive}>
       <span class="caret" class:open={showArchive}>▸</span> Arsip
+      {#if archiveLoaded && archived.length > 0}
+        <span class="archive-count">{archived.length}</span>
+      {/if}
     </button>
     {#if showArchive}
       {#if archived.length === 0}
@@ -904,6 +907,13 @@
   }
   .archive li .info small {
     font-style: italic;
+  }
+  .archive-count {
+    font-size: 0.7rem;
+    background: #f0f0f0;
+    border-radius: 999px;
+    padding: 0 0.4rem;
+    color: #525252;
   }
 
   /* Fokus Hari Ini */
